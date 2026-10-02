@@ -423,7 +423,7 @@ In the Phase 5 run, print DeepSpeed's resolved `gradient_clipping` value from th
 
 ## Phase 5
 
-Phase Status: active
+Phase Status: completed
 
 Round: 3
 
@@ -460,7 +460,7 @@ Phases 1, 2, 3, 4
 
 ## Phase 6
 
-Phase Status: pending
+Phase Status: active
 
 Round: 4
 

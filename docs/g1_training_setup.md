@@ -73,3 +73,17 @@ Experiment on FLUX.2-klein-base-4B G1, full fine-tuning of about 4.6B trainable 
 | C (`nnmc71`) | 2 | 5 (largest 995,773,696) | ≈0.50B elements | finite, 2.95 → 2.51 (range 1.21–4.47) |
 
 The same failure appeared earlier with FLUX.2-9B on 4 GPUs (≈2.5B per rank), while a 9B run with a LoRA video expert (about 1B trainable) on 2 GPUs stayed finite for 200 steps.
+
+## FLUX.2-klein-base-4B Smoke Test
+
+`nnmc71` GPUs 6–7 (H100 NVL), `.venv`, task `g1_lgg100_flux2_klein_4b_base_imagewam`. Settings: ZeRO-2, 4 per GPU, gradient accumulation 8 (effective batch 64), `optimizer_max_group_numel` 1e9, `expandable_segments`, 30 steps, validation at steps 15 and 30. Log: `ImageWAM/runs/smoke_logs/smoke_flux2_4b.log`.
+
+| Measure | Value |
+|---|---|
+| Loss, steps 1–30 | all finite: 2.41 at step 1, 1.10–1.55 at steps 25–30 |
+| Validation, step 15 (1 sample) | `val_loss` 2.361, PSNR 15.88, `action_l2` 0.294, `action_l1` 0.340 |
+| Validation, step 30 (1 sample) | `val_loss` 3.151, PSNR 14.16, `action_l2` 0.463, `action_l1` 0.407 |
+| Throughput | 0.18 optimizer steps/s, i.e. 5.5 s and 64 samples per step (11.6 samples/s). The trainer's "samples/s" field omits gradient accumulation. |
+| Peak GPU memory | 62.0 GB per GPU |
+| Checkpoint size | weights 8.5 GB per save; resumable state 60 GB |
+| Projected full run | 27,950 steps × 5.5 s ≈ 43 h plus validation every 500 steps |
