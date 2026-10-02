@@ -649,7 +649,7 @@ Phase 8
 
 ## Phase 12
 
-Phase Status: active
+Phase Status: completed
 
 Round: 4
 
@@ -682,7 +682,7 @@ Phases 8, 9, 10, 11
 
 ## Phase 13
 
-Phase Status: pending
+Phase Status: active
 
 Round: 5
 

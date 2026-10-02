@@ -392,6 +392,66 @@ def create_imagewam_flux2_klein(
     )
 
 
+def create_imagewam_qwenimage21(
+    transformer_dir: str,
+    vae_dir: str,
+    action_dit_config=None,
+    action_dit_pretrained_path: str | None = None,
+    proprio_dim: int | None = None,
+    qwen_context_len: int = 128,
+    gradient_checkpointing: bool = True,
+    video_scheduler=None,
+    action_scheduler=None,
+    loss=None,
+    mot_checkpoint_mixed_attn: bool = True,
+    mot_gqa_implementation: str = "repeat",
+    mot_force_flash_attention: bool = False,
+    pack_proprio_after_text: bool = True,
+    model_dtype: torch.dtype = torch.bfloat16,
+    device: str = "cuda",
+):
+    from .models.backbones.imagewam import ImageWAM
+
+    def _as_dict(value, name: str, required: bool = False) -> dict:
+        if isinstance(value, DictConfig):
+            value = OmegaConf.to_container(value, resolve=True)
+        if value is None:
+            if required:
+                raise ValueError(f"`{name}` is required for the ImageWAM Qwen-Image-2.1 stack.")
+            value = {}
+        if not isinstance(value, dict):
+            raise ValueError(f"`{name}` must be dict-like, got {type(value)}")
+        return value
+
+    action_dit_config = _as_dict(action_dit_config, "action_dit_config", required=True)
+    video_scheduler = _as_dict(video_scheduler, "video_scheduler")
+    action_scheduler = _as_dict(action_scheduler, "action_scheduler", required=True)
+    loss = _as_dict(loss, "loss")
+    return ImageWAM.from_qwenimage21_pretrained(
+        transformer_dir=transformer_dir,
+        vae_dir=vae_dir,
+        action_dit_config=action_dit_config,
+        action_dit_pretrained_path=action_dit_pretrained_path,
+        proprio_dim=(None if proprio_dim is None else int(proprio_dim)),
+        device=device,
+        torch_dtype=model_dtype,
+        gradient_checkpointing=bool(gradient_checkpointing),
+        mot_checkpoint_mixed_attn=bool(mot_checkpoint_mixed_attn),
+        video_train_shift=float(video_scheduler.get("train_shift", 5.0)),
+        video_infer_shift=float(video_scheduler.get("infer_shift", 5.0)),
+        video_num_train_timesteps=int(video_scheduler.get("num_train_timesteps", 1000)),
+        action_train_shift=float(action_scheduler["train_shift"]),
+        action_infer_shift=float(action_scheduler["infer_shift"]),
+        action_num_train_timesteps=int(action_scheduler["num_train_timesteps"]),
+        loss_lambda_video=float(loss.get("lambda_video", 1.0)),
+        loss_lambda_action=float(loss.get("lambda_action", 1.0)),
+        mot_gqa_implementation=str(mot_gqa_implementation),
+        mot_force_flash_attention=bool(mot_force_flash_attention),
+        pack_proprio_after_text=bool(pack_proprio_after_text),
+        qwen_context_len=int(qwen_context_len),
+    )
+
+
 def create_imagewam_dim(
     dim_model_path: str,
     sana_config_path: str,

@@ -1,0 +1,34 @@
+_target_: imagewam.runtime.create_imagewam_qwenimage21
+
+transformer_dir: ???
+vae_dir: ???
+qwen_context_len: 128
+proprio_dim: null
+gradient_checkpointing: true
+mot_checkpoint_mixed_attn: true
+mot_gqa_implementation: repeat
+mot_force_flash_attention: false
+pack_proprio_after_text: true
+action_dit_pretrained_path: null
+
+# num_heads / attn_head_dim / num_layers follow the video transformer (32 / 128 / 32).
+action_dit_config:
+  action_dim: ${data.train.processor.action_output_dim}
+  hidden_dim: 1024
+  mlp_ratio: 3
+  eps: 1.0e-6
+  max_action_horizon: 64
+
+video_scheduler:
+  train_shift: 5.0
+  infer_shift: 5.0
+  num_train_timesteps: 1000
+
+action_scheduler:
+  train_shift: 5.0
+  infer_shift: 5.0
+  num_train_timesteps: 1000
+
+loss:
+  lambda_video: 0.5
+  lambda_action: 1.0

@@ -585,6 +585,102 @@ class ImageWAM(torch.nn.Module):
         return model
 
     @classmethod
+    def from_qwenimage21_pretrained(
+        cls,
+        transformer_dir: str,
+        vae_dir: str,
+        action_dit_config: dict[str, Any],
+        action_dit_pretrained_path: str | None = None,
+        proprio_dim: Optional[int] = None,
+        device: str = "cuda",
+        torch_dtype: torch.dtype = torch.bfloat16,
+        gradient_checkpointing: bool = True,
+        mot_checkpoint_mixed_attn: bool = True,
+        video_train_shift: float = 5.0,
+        video_infer_shift: float = 5.0,
+        video_num_train_timesteps: int = 1000,
+        action_train_shift: float = 5.0,
+        action_infer_shift: float = 5.0,
+        action_num_train_timesteps: int = 1000,
+        loss_lambda_video: float = 1.0,
+        loss_lambda_action: float = 1.0,
+        mot_gqa_implementation: str = "repeat",
+        mot_force_flash_attention: bool = False,
+        pack_proprio_after_text: bool = True,
+        qwen_context_len: int = 128,
+    ):
+        """Qwen-Image-2.1 stack (plan.md M7-M10): native video transformer, action DiT, vendored VAE, cached text."""
+        from pathlib import Path
+
+        from .action_dit_qwenimage21 import ActionDiTQwenImage21, ActionDiTQwenImage21Config
+        from .mot import MoT
+        from .qwenimage21_vae import QwenImage21VAE
+        from .qwenimage21_video_expert import QwenImage21VideoExpert
+
+        video_expert = QwenImage21VideoExpert.from_pretrained(transformer_dir, device=device, torch_dtype=torch_dtype)
+        video_expert.use_gradient_checkpointing = bool(gradient_checkpointing)
+        action_cfg = dict(action_dit_config)
+        expected_action_shape = {
+            "num_heads": int(video_expert.num_heads),
+            "attn_head_dim": int(video_expert.attn_head_dim),
+            "num_layers": len(video_expert.blocks),
+        }
+        for key_name, expected_value in expected_action_shape.items():
+            if key_name in action_cfg and int(action_cfg[key_name]) != int(expected_value):
+                raise ValueError(
+                    f"action_dit_config.{key_name}={action_cfg[key_name]} does not match Qwen-Image-2.1 ({expected_value})"
+                )
+            action_cfg[key_name] = expected_value
+        action_cfg["use_gradient_checkpointing"] = bool(gradient_checkpointing)
+        action_expert = ActionDiTQwenImage21.from_pretrained(
+            ActionDiTQwenImage21Config.from_dict(action_cfg),
+            action_dit_pretrained_path,
+            device=device,
+            torch_dtype=torch_dtype,
+        )
+        mot = MoT(
+            mixtures={"video": video_expert, "action": action_expert},
+            mot_checkpoint_mixed_attn=mot_checkpoint_mixed_attn,
+            gqa_implementation=mot_gqa_implementation,
+            force_flash_attention=mot_force_flash_attention,
+        )
+        vae = QwenImage21VAE.from_pretrained(Path(vae_dir), device=device, torch_dtype=torch_dtype)
+        model = cls(
+            video_expert=video_expert,
+            action_expert=action_expert,
+            mot=mot,
+            vae=vae,
+            text_encoder=None,
+            tokenizer=None,
+            text_dim=int(video_expert.config.context_in_dim),
+            proprio_dim=proprio_dim,
+            device=device,
+            torch_dtype=torch_dtype,
+            video_train_shift=video_train_shift,
+            video_infer_shift=video_infer_shift,
+            video_num_train_timesteps=video_num_train_timesteps,
+            action_train_shift=action_train_shift,
+            action_infer_shift=action_infer_shift,
+            action_num_train_timesteps=action_num_train_timesteps,
+            loss_lambda_video=loss_lambda_video,
+            loss_lambda_action=loss_lambda_action,
+            stack="qwenimage21",
+            qwen_context_len=int(qwen_context_len),
+            pack_proprio_after_text=bool(pack_proprio_after_text),
+        )
+        model.model_paths = {
+            "transformer": transformer_dir,
+            "vae": vae_dir,
+            "action_dit": action_dit_pretrained_path,
+        }
+        return model
+
+    def _qwenimage21_stack(self):
+        from .qwenimage21_stack import QwenImage21Stack
+
+        return QwenImage21Stack(self)
+
+    @classmethod
     def from_dim_pretrained(
         cls,
         dim_model_path: str,
@@ -2594,6 +2690,8 @@ class ImageWAM(torch.nn.Module):
             return self._training_loss_dim(sample, tiled=tiled)
         if self.stack == "flux2":
             return self._training_loss_flux2(sample, tiled=tiled)
+        if self.stack == "qwenimage21":
+            return self._qwenimage21_stack().training_loss(sample)
         if self.stack == "ovis_u1":
             return self._training_loss_ovis_u1(sample, tiled=tiled)
         if self.stack == "omnigen2":
@@ -3088,6 +3186,20 @@ class ImageWAM(torch.nn.Module):
         if self.stack == "flux2":
             return self.infer_action_flux2(
                 prompt=prompt,
+                input_image=input_image,
+                action_horizon=action_horizon,
+                proprio=proprio,
+                context=context,
+                context_mask=context_mask,
+                num_inference_steps=num_inference_steps,
+                sigma_shift=sigma_shift,
+                seed=seed,
+                rand_device=rand_device,
+            )
+        if self.stack == "qwenimage21":
+            if prompt is not None:
+                raise ValueError("The Qwen-Image-2.1 stack needs cached text features (`context`/`context_mask`).")
+            return self._qwenimage21_stack().infer_action(
                 input_image=input_image,
                 action_horizon=action_horizon,
                 proprio=proprio,
@@ -4342,6 +4454,26 @@ class ImageWAM(torch.nn.Module):
             )
             image = video_out["image"].detach().float().clamp(-1, 1)
             image = ((image + 1.0) * 127.5).to(torch.uint8).permute(1, 2, 0).cpu().numpy()
+            return {"action": action_out["action"], "video": [Image.fromarray(image)]}
+        if self.stack == "qwenimage21":
+            if action_horizon is None:
+                raise ValueError("`action_horizon` is required for Qwen-Image-2.1 action inference.")
+            if prompt is not None:
+                raise ValueError("The Qwen-Image-2.1 stack needs cached text features (`context`/`context_mask`).")
+            stack = self._qwenimage21_stack()
+            common = dict(
+                input_image=input_image,
+                proprio=proprio,
+                context=context,
+                context_mask=context_mask,
+                num_inference_steps=num_inference_steps,
+                sigma_shift=sigma_shift,
+                seed=seed,
+                rand_device=rand_device,
+            )
+            action_out = stack.infer_action(action_horizon=action_horizon, **common)
+            video_out = stack.infer_image(**common)
+            image = ((video_out["image"] + 1.0) * 127.5).to(torch.uint8).permute(1, 2, 0).cpu().numpy()
             return {"action": action_out["action"], "video": [Image.fromarray(image)]}
 
         return self.infer_joint(

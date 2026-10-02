@@ -240,6 +240,16 @@ class MoT(nn.Module):
             return self._build_io_omnigen2(expert, block, x, freqs, t_mod)
         if self.block_protocol == "wan22":
             return self._build_io_wan22(expert, block, x, freqs, t_mod)
+        if self.block_protocol == "qwenimage21":
+            built = block.prepare_qkv(x, freqs, t_mod)
+            return {
+                "q": built.q,
+                "k": built.k,
+                "v": built.v,
+                "residual_x": built.residual_x,
+                "post_state": built.post_state,
+                "use_gradient_checkpointing": bool(getattr(expert, "use_gradient_checkpointing", False)),
+            }
         raise ValueError(f"Unsupported block_protocol={self.block_protocol!r}")
 
     @staticmethod
@@ -415,6 +425,8 @@ class MoT(nn.Module):
     ) -> torch.Tensor:
         if self.block_protocol == "omnigen2":
             return self._apply_post_omnigen2(block, residual_x, mixed_attn_out, post_state)
+        if self.block_protocol == "qwenimage21":
+            return block.apply_post(residual_x, mixed_attn_out, post_state)
         return self._apply_post_wan22(block, residual_x, mixed_attn_out, post_state, context_payload)
 
     def _apply_post_with_optional_checkpoint(
@@ -1079,6 +1091,47 @@ class MoT(nn.Module):
             )
         return x
 
+    def _forward_qwenimage21(
+        self,
+        embeds_all: Dict[str, torch.Tensor],
+        attention_mask: torch.Tensor,
+        freqs_all: Dict[str, torch.Tensor],
+        t_mod_all: Dict[str, object],
+    ) -> Dict[str, torch.Tensor]:
+        """Joint layers for Qwen-Image-2.1 experts; when any expert enables gradient checkpointing, each whole layer
+        (both experts' projections, the joint attention and both post blocks) is recomputed in backward."""
+        names = list(self.expert_order)
+        use_checkpoint = self.training and any(
+            bool(getattr(self.mixtures[name], "use_gradient_checkpointing", False)) for name in names
+        )
+
+        def _layer(layer_idx: int, *tokens: torch.Tensor) -> tuple[torch.Tensor, ...]:
+            blocks = [self.mixtures[name].blocks[layer_idx] for name in names]
+            built = [
+                block.prepare_qkv(x, freqs_all[name], t_mod_all[name])
+                for block, x, name in zip(blocks, tokens, names)
+            ]
+            mixed = self._mixed_attention(
+                torch.cat([item.q for item in built], dim=1),
+                torch.cat([item.k for item in built], dim=1),
+                torch.cat([item.v for item in built], dim=1),
+                attention_mask,
+            )
+            outputs, start = [], 0
+            for block, item, x in zip(blocks, built, tokens):
+                end = start + x.shape[1]
+                outputs.append(block.apply_post(item.residual_x, mixed[:, start:end], item.post_state))
+                start = end
+            return tuple(outputs)
+
+        tokens = tuple(embeds_all[name] for name in names)
+        for layer_idx in range(self.num_layers):
+            if use_checkpoint:
+                tokens = torch.utils.checkpoint.checkpoint(_layer, layer_idx, *tokens, use_reentrant=False)
+            else:
+                tokens = _layer(layer_idx, *tokens)
+        return dict(zip(names, tokens))
+
     def forward(
         self,
         embeds_all: Dict[str, torch.Tensor],
@@ -1109,6 +1162,13 @@ class MoT(nn.Module):
                 attention_mask=attention_mask,
                 freqs_all=freqs_all,
                 context_all=context_all,
+                t_mod_all=t_mod_all,
+            )
+        if self.block_protocol == "qwenimage21":
+            return self._forward_qwenimage21(
+                embeds_all=embeds_all,
+                attention_mask=attention_mask,
+                freqs_all=freqs_all,
                 t_mod_all=t_mod_all,
             )
         for key in self.expert_order:

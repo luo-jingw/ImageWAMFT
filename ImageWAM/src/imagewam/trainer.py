@@ -685,7 +685,10 @@ class Wan22Trainer:
         is_ovis_u1_stack = model_stack == "ovis_u1"
         is_flux2_stack = model_stack == "flux2"
         is_dim_stack = model_stack == "dim"
-        is_image_prediction_stack = is_omnigen2_stack or is_ovis_u1_stack or is_flux2_stack or is_dim_stack
+        is_qwenimage21_stack = model_stack == "qwenimage21"
+        is_image_prediction_stack = (
+            is_omnigen2_stack or is_ovis_u1_stack or is_flux2_stack or is_dim_stack or is_qwenimage21_stack
+        )
         rng = torch.Generator(device="cpu").manual_seed(self.global_step + self.accelerator.process_index)
         eval_indices = torch.randint(
             0,
@@ -729,7 +732,7 @@ class Wan22Trainer:
                     "seed": 42,
                     "tiled": False,
                 }
-                if (is_omnigen2_stack or is_flux2_stack) and sample.get("text_hidden_states") is not None:
+                if (is_omnigen2_stack or is_flux2_stack or is_qwenimage21_stack) and sample.get("text_hidden_states") is not None:
                     infer_kwargs["prompt"] = None
                     infer_kwargs["context"] = sample["text_hidden_states"][0]
                     infer_kwargs["context_mask"] = sample["text_attention_mask"][0]
@@ -860,6 +863,13 @@ class Wan22Trainer:
                         height=int(gt_final.shape[-2]),
                         width=int(gt_final.shape[-1]),
                     )[0]
+                    vae_np = ((vae_image.detach().float().cpu().clamp(-1, 1) + 1.0) * 127.5).to(torch.uint8).permute(1, 2, 0).numpy()
+                    vae_video_tensor = pil_frames_to_video_tensor([Image.fromarray(vae_np)])
+                elif is_qwenimage21_stack:
+                    gt_final = video0[:, -1].unsqueeze(0).to(device=model.device, dtype=model.torch_dtype)
+                    qwen_stack = model._qwenimage21_stack()
+                    vae_tokens, vae_grid = qwen_stack.encode_image(gt_final)
+                    vae_image = qwen_stack.decode_tokens(vae_tokens, vae_grid)[0]
                     vae_np = ((vae_image.detach().float().cpu().clamp(-1, 1) + 1.0) * 127.5).to(torch.uint8).permute(1, 2, 0).numpy()
                     vae_video_tensor = pil_frames_to_video_tensor([Image.fromarray(vae_np)])
                 elif is_dim_stack:

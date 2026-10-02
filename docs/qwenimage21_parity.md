@@ -75,3 +75,25 @@ The normalized latents of these frames have mean −0.065 and std 1.12.
   - timestep MLP (4096, 256) → (1024, 256) and (4096, 4096) → (1024, 1024).
 - Fresh: `action_encoder` (Linear 16 → 1024) and `head` (`norm_out.linear`, `proj_out`), as for the FLUX.2 action DiT.
 - Check, bf16 on one H100: `prepare_qkv` returns q/k/v of shape [B, L, 4096]. A 32-block forward on random actions gives a finite [2, 16, 16] output.
+
+## ImageWAM Stack Integration (Phase 12)
+
+Check: `ImageWAM/scripts/qwenimage21/check_stack_qwenimage21.py` on one H100 with `.venv`. The model is built from the task config `g1_lgg100_qwenimage21_imagewam`, using validation samples and the FLUX.2 run's normalization statistics.
+- **Attention mask** for the layout [2 text tokens + 1 padded | 2 reference | 2 target | 2 action] matches D2:
+  - text and reference rows attend to text and reference;
+  - target rows attend to text, reference and target;
+  - action rows attend to text, reference and action;
+  - the padded text column is masked everywhere.
+- **One training batch** (2 samples, bf16, trainer freeze policy):
+  - loss 2.207 (λ·video 0.030, λ·action 2.177), finite.
+  - Every trainable tensor gets a non-zero gradient: video expert 297/297, action expert 295/295, proprio encoder 2/2.
+  - The VAE has `requires_grad=False` and no gradients.
+  - Peak memory is 30.9 GiB: bf16 weights and gradients, with whole-layer gradient checkpointing.
+- **`infer_action`** (10 steps) returns a finite [16, 16] action.
+- **Prefix cache:** for the same noisy action and timestep, the action prediction from the cached t = 0 prefix (`prefill_video_cache` + `forward_action_with_video_cache`) is compared with a full joint forward over [text | reference | noisy target | action]:
+  - fp32: max abs diff 6.3e-6, against a prediction max of 1.9;
+  - bf16: max abs diff 1.0e-1, against a prediction max of 2.0. This is rounding accumulated over 32 layers, since the prefix runs at a different sequence length.
+
+Layout notes:
+- The text segment is the cached 128-token Qwen3-VL features plus the proprio token packed after the valid text: 129 positions with right padding, the same packing as the FLUX.2 stack.
+- The reference block therefore starts at rotary position 129 for every prompt, not directly after the valid text as in the native pipeline.
