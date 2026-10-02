@@ -129,3 +129,14 @@ Run e results:
 | Projected full run | 27,950 steps / 0.15 steps/s ≈ 52 h plus validation |
 
 Single-GPU reference without DeepSpeed (batch 4, bf16): forward 0.18 s, backward 0.47 s with whole-layer checkpointing (peak 32 GiB with weights and gradients). Without checkpointing the backward is 0.32 s, but the peak is 55.7 GiB, which leaves no room for the optimizer state on 94 GB.
+
+## Qwen-Image-2.1 Full Run (Phase 14)
+
+- Launch: `launch/g1_qwenimage21_train.sh`, `tmux` session `imagewamft_qwenimage21` on **`nnmc72`** (`ssh nnmc72`, then `tmux attach -t imagewamft_qwenimage21`), GPUs 4,5 (an NVLink pair), `.venv` through the `nnmc72` symlink. Started 2026-10-01 22:39.
+- Output: `checkpoints/g1_lgg100_qwenimage21_imagewam/`. It holds `train.log`, `config.yaml`, `dataset_stats.json` (copied from the FLUX.2-4B run, D8), `eval/`, offline `wandb/` and `checkpoints/{weights,state}/`.
+- Recipe: identical to the FLUX.2-4B run, 27,950 steps with weights every 5,000 steps.
+- Resolved config vs. the FLUX.2-4B run (`diff` of the two `config.yaml`):
+  - Backbone-bound entries: model target and weight paths, the action-DiT shape and initialization file, and the text cache directory and format.
+  - `pretrained_norm_stats` points to the FLUX.2 run's statistics.
+  - Settings that do not change the computed values: `gradient_checkpointing: true`, `deepspeed_cache_used_param_count: true` (ISSUE-009), and `optimizer_impl: torch_adamw`, which is the same AdamW the FLUX.2 run constructs.
+- First steps: loss 3.02 at step 10 (FLUX.2-4B: 3.03) and 2.44 at step 20. Speed 0.15 steps/s, 86 GB per GPU.
