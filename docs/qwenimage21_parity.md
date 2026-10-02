@@ -59,3 +59,19 @@ The normalized latents of these frames have mean −0.065 and std 1.12.
 - Contents: `text_hidden_states` [128, 4096] bf16, zero-padded, and `text_attention_mask` [128] bool.
 - The cached features equal `text_embeds.pt` exactly (max abs diff 0) for all four prompts. The padding rows are all zero.
 - `RobotVideoDataset` with `qwen_text_cache_format: qwen3vl_qwenimage21` returns these tensors for all four instructions. Valid lengths are 59, 60, 40 and 57.
+
+## Action DiT (`ActionDiTQwenImage21`)
+
+`ImageWAM/src/imagewam/models/backbones/action_dit_qwenimage21.py`; initialization by `ImageWAM/scripts/qwenimage21/preprocess_action_dit_qwenimage21.py` → `ImageWAM/checkpoints/action_dit_qwenimage21_g1_init.pt` (bf16, 1.7 GB).
+- Layout: 32 `QwenImage21Block`s with residual width 1024, attention width 4096 (32 heads × 128, shared with the video expert), SwiGLU 1024 → 3072. One shared modulation, and a fresh scale-only AdaLN head projecting to 16.
+- Parameter count: 845,456,384.
+- Copied unchanged (64 tensors): the per-head QK-norm weights.
+- Interpolated from the video transformer (227 tensors). Alpha scaling sqrt(src_in / dst_in) = 2 is applied wherever the input axis shrinks from 4096 to 1024:
+  - `to_q`/`to_k`/`to_v` (4096, 4096) → (4096, 1024);
+  - `to_out.0` (4096, 4096) → (1024, 4096);
+  - `img_mlp.proj`/`gate_layer` (12288, 4096) → (3072, 1024);
+  - `img_mlp.out` (4096, 12288) → (1024, 3072);
+  - `modulation.1` (16384, 4096) → (4096, 1024);
+  - timestep MLP (4096, 256) → (1024, 256) and (4096, 4096) → (1024, 1024).
+- Fresh: `action_encoder` (Linear 16 → 1024) and `head` (`norm_out.linear`, `proj_out`), as for the FLUX.2 action DiT.
+- Check, bf16 on one H100: `prepare_qkv` returns q/k/v of shape [B, L, 4096]. A 32-block forward on random actions gives a finite [2, 16, 16] output.

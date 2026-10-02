@@ -617,7 +617,7 @@ Phase 3 (G1 data config and prompts), Phase 7 (environment)
 
 ## Phase 11
 
-Phase Status: active
+Phase Status: completed
 
 Round: 3
 
@@ -649,7 +649,7 @@ Phase 8
 
 ## Phase 12
 
-Phase Status: pending
+Phase Status: active
 
 Round: 4
 
