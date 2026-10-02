@@ -10,6 +10,8 @@ LOGDIR="${PROJECT_ROOT}/tensorboard"
 PORT="${PORT:-6006}"
 export WANDB_MODE=offline
 mkdir -p "${LOGDIR}"
+# The mirror is rebuilt from the wandb logs; clear it first so TensorBoard never loads stale event files.
+rm -f "${LOGDIR}"/*/events.out.tfevents.*
 
 "${PROJECT_ROOT}/.venv/bin/python" "${PROJECT_ROOT}/ImageWAM/scripts/wandb_offline_to_tensorboard.py" \
   --logdir "${LOGDIR}" \
