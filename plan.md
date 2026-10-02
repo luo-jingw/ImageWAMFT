@@ -712,7 +712,7 @@ Same report as Phase 5, with per-block checkpointing on.
 
 ## Phase 14
 
-Phase Status: active
+Phase Status: completed
 
 Round: 6
 

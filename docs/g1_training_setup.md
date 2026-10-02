@@ -140,3 +140,12 @@ Single-GPU reference without DeepSpeed (batch 4, bf16): forward 0.18 s, backward
   - `pretrained_norm_stats` points to the FLUX.2 run's statistics.
   - Settings that do not change the computed values: `gradient_checkpointing: true`, `deepspeed_cache_used_param_count: true` (ISSUE-009), and `optimizer_impl: torch_adamw`, which is the same AdamW the FLUX.2 run constructs.
 - First steps: loss 3.02 at step 10 (FLUX.2-4B: 3.03) and 2.44 at step 20. Speed 0.15 steps/s, 86 GB per GPU.
+
+| Measure (first 500 steps) | Qwen-Image-2.1 | FLUX.2-4B (same steps) |
+|---|---|---|
+| Loss | all finite; 3.02 at step 10, 0.128 at step 500 (λ·action 0.076, λ·video 0.051) | 3.03 at step 10, 0.216 at step 500 |
+| Throughput | 0.15 steps/s; per micro-batch forward 0.18 s, backward 0.69 s | 0.27 steps/s |
+| Validation, step 500 (2 samples, one per rank) | `val_loss` 0.1194, PSNR 16.24, SSIM 0.726, `action_l2` 0.0939, `action_l1` 0.1593 | `val_loss` 0.1645, PSNR 16.97, SSIM 0.756, `action_l2` 0.0601, `action_l1` 0.1215 |
+| Projected wall clock | about 52 h plus validation | about 29 h |
+
+Validation uses 2 random samples per evaluation, so single-step comparisons are noisy.
