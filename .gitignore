@@ -22,3 +22,6 @@ papers/*.txt
 
 # Trained runs
 checkpoints/
+
+# TensorBoard mirror of the offline wandb runs (launch/tensorboard.sh)
+tensorboard/
