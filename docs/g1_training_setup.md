@@ -149,3 +149,41 @@ Single-GPU reference without DeepSpeed (batch 4, bf16): forward 0.18 s, backward
 | Projected wall clock | about 52 h plus validation | about 29 h |
 
 Validation uses 2 random samples per evaluation, so single-step comparisons are noisy.
+
+## Predicted-Frame Time Offset (2026-10-02)
+
+Question: the validation images show predicted frames with correct object shapes and textures but slightly displaced arms and objects, as if shifted by a few frames. Is the prediction systematically early or late, and is the data misaligned?
+
+Script: `ImageWAM/scripts/analyze_prediction_time_offset.py`, run on `nnmc71` GPU 1 against the saved weights while both runs continued training. Results are in `ImageWAM/runs/analysis/time_offset_*.json`.
+
+**Data alignment** (4 validation episodes; lag of best correlation between a camera region's frame-to-frame change and the matching arm's joint speed; positive means the video is later than the state):
+
+| Episode | head | left wrist | right wrist |
+|---|---|---|---|
+| drawer | +3 | +4 | +2 |
+| biomanual | +2 | +3 | −1 |
+| simple-pick | +4 | +4 | +3 |
+| Stack-the-cubes | +3 | +3 | see JSON |
+
+The video lags the recorded joint state by about 3 frames (100 ms), with the cameras at roughly the same lag as one another. Together with the action leading the state by 3 frames (`docs/lgg100_dataset.md`), the image shows a commanded action about 6 frames later. The lag is the same in training and validation, so it does not shift the validation comparison. It matters for deployment, where proprio and images must keep the recorded relative timing.
+
+**Model offset**: 40 validation samples, 10 per episode. Each prediction of frame t+16 is compared with ground-truth frames t+16+k, k ∈ [−8, 8], by pixel MSE on the full tiling.
+- `best k` is the per-sample k with the lowest error; negative means the predicted scene is behind the ground truth.
+- The `copy current frame` baseline correctly lands at the boundary k = −8.
+
+| Model, checkpoint | Sampling | Argmin of mean error curve | Median best k | PSNR at k = 0 | PSNR at best k | Seed disagreement in best k |
+|---|---|---|---|---|---|---|
+| Qwen-Image-2.1, step 5000 | 10 steps, seed 0 / 1 | −3 / −5 | −3.5 / −4.0 | 19.77 / 20.13 | 20.70 / 21.33 | 3.25 |
+| Qwen-Image-2.1, step 5000 | 30 steps, seed 0 | −3 | −3.5 | 19.52 | 20.48 | — |
+| FLUX.2-4B, step 5000 | 10 steps, seed 0 / 1 | −4 / −5 | −3.5 / −3.5 | 19.70 / 19.74 | 20.85 / 20.86 | 2.92 |
+| FLUX.2-4B, step 5000 | 30 steps, seed 0 | −4 | −5.0 | 19.58 | 20.71 | — |
+| FLUX.2-4B, step 10000 | 10 steps, seed 0 / 1 | −2 / −3 | −2.0 / −3.0 | 20.37 / 20.09 | 21.69 / 21.33 | 1.93 |
+| Copy current frame | — | −8 (boundary) | −8 | 18.87 | 21.97 at k = −8 | — |
+
+Conclusions:
+- Both backbones predict a scene that is behind the ground truth, by about 3–4 frames at step 5000. The motion is under-predicted; the timeline is not misindexed.
+- The eval pipeline compares frame t+16 with the prediction of frame t+16, and adjacent dataset indices are consecutive frames.
+- More sampling steps (30 vs 10) do not change the offset, so it is not a sampler-discretization effect.
+- For the same input, two seeds differ by about 3 frames in best k, so a single validation image carries a large stochastic timing spread.
+- From FLUX.2 step 5000 to 10000 the offset shrinks to about 2–3 frames, the seed spread to about 2 frames, and PSNR at k = 0 rises by about 0.5 dB. The bias is decreasing with training.
+- By design (D2) the image branch does not attend to the action tokens. It must infer the 16-frame progress from one frame, the joint state and the instruction, with no velocity input. A conservative, slower predicted progress is the expected early-training behavior.
