@@ -522,7 +522,7 @@ none
 
 ## Phase 8
 
-Phase Status: pending
+Phase Status: completed
 
 Round: 2
 
