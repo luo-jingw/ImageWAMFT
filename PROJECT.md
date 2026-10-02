@@ -37,8 +37,38 @@ FLUX.2-klein-base-4B, the backbone the paper reports for its real-world experime
   - Other nodes' `/home/user1` is their own local disk, and the project does not exist there. On other nodes, use only the `/shared/user71/...` path.
   - Access: passwordless `ssh nnmc<N>` works from `nnmc71`, and from other nodes back to `nnmc71` (checked with `nnmc72`).
   - Using another node's GPUs: `ssh nnmc<N>`, then work in `/shared/user71/workspace/jingwu/ImageWAMFT`.
+  - Allowed nodes for this project: `nnmc61`–`nnmc71`.
+  - GPU grant (2026-10-01): two GPUs on `nnmc71` (8× H100 NVL, 95,830 MiB) and two GPUs on `nnmc73`. `nnmc73` has 8× B300 SXM6 AC with 275,040 MiB, compute capability 10.3, driver 595.71.05 (CUDA 13.2), no CUDA toolkit in `/usr/local`, Ubuntu 24.04, and uv 0.11.28. Other GPUs on those nodes, and nodes `nnmc72` and `nnmc74`–`nnmc76`, are not used.
+  - A node may need its own Python environment, because GPU models, CUDA toolkits and uv-managed interpreters differ between nodes. Each node gets its own uv environment built with the `.venv` recipe below, and rebuilding per node is acceptable.
+  - Hardware of the allowed nodes (read-only survey, 2026-10-01). All have `uv` at `/home/user1/.local/bin/uv` and 128 CPUs, except `nnmc71` with 96:
+
+    | Nodes | GPUs | CUDA toolkits in `/usr/local` |
+    |---|---|---|
+    | `nnmc71` | 8× H100 NVL, 95,830 MiB | 12.4, 12.6 |
+    | `nnmc61`, `nnmc63`, `nnmc64` | 8× L40S, 46,068 MiB | 11.7, 12.1, 12.2, 12.6 |
+    | `nnmc62`, `nnmc65` | 8× L40S, 46,068 MiB | 11.7, 12.1 |
+    | `nnmc66`, `nnmc67` | 8× L40S, 46,068 MiB | 11.7, 12.1, 12.4 |
+    | `nnmc68` | 8× L40S, 46,068 MiB | 11.7 |
+    | `nnmc69` | 8× L40S, 46,068 MiB | 12, 12.6 |
+    | `nnmc70` | 8× L40S, 46,068 MiB | none: no `nvcc`, so DeepSpeed import fails with `MissingCUDAException: CUDA_HOME does not exist` |
+
+  - The uv-managed CPython that `.venv` links to (`/home/user1/.local/share/uv/python/cpython-3.11.13-linux-x86_64-gnu`) exists on `nnmc72` but not on `nnmc57`. A node-specific environment therefore needs its own `uv venv`.
   - Nodes `nnmc57`–`nnmc72` report 8 GPUs with 95,830 MiB each. Nodes `nnmc73`–`nnmc76` report per-GPU memory use above 96 GB, so their GPU model differs.
   - GPU availability changes over time; check it with `nvidia-smi` on the target node before launching.
+- `nnmc73` environment, used for the B300 GPUs. Run every command from `/shared/user71/workspace/jingwu/ImageWAMFT`.
+  - Python environment: `.venv-nnmc73`, built on `nnmc73` with uv:
+    1. `uv venv .venv-nnmc73 --python 3.11` (uses the `nnmc73` uv-managed CPython 3.11.15).
+    2. `uv pip install --python .venv-nnmc73/bin/python --link-mode copy torch==2.9.1 torchvision==0.24.1 --index-url https://download.pytorch.org/whl/cu130`
+    3. In `ImageWAM/`: `uv pip install --python ../.venv-nnmc73/bin/python --link-mode copy --no-sources -e '.[shared]' --override ../node_env/nnmc73_overrides.txt`. The override file is the `.venv` freeze without torch, torchvision, torchcodec, triton and `nvidia-*`, plus torch 2.9.1, torchvision 0.24.1 and torchcodec 0.8.1.
+    4. `uv pip install --python .venv-nnmc73/bin/python --link-mode copy nvidia-cuda-nvcc==13.0.88`
+  - FFmpeg: `.ffmpeg-nnmc73`, a conda prefix built with `/home/user1/miniconda3/bin/conda create -p .ffmpeg-nnmc73 -c conda-forge --override-channels ffmpeg=7.1`. It provides `libavcodec.so.61` and the `libdav1d` AV1 decoder, which torchcodec needs; `nnmc73` has no system FFmpeg.
+  - Runtime: `source node_env/nnmc73.sh` sets `PROJECT_ROOT`, the `.venv-nnmc73` interpreter and `PATH`, `CUDA_HOME` (pip nvcc 13.0, which DeepSpeed needs at import), `LD_LIBRARY_PATH` (FFmpeg) and `HF_HUB_OFFLINE=1`.
+  - Verified on 2026-10-01:
+    - torch 2.9.1+cu130 runs bf16 matmuls on B300. Its arch list has no explicit `sm_103`; the `sm_100` kernels run on compute capability 10.3.
+    - DeepSpeed 0.18.5 and imagewam import.
+    - torchcodec 0.8.1 decodes the LGG100 AV1 videos.
+    - All 36,188 installed files match their RECORD hashes.
+    - Other versions equal `.venv`: transformers 4.56.1, huggingface-hub 0.36.2, accelerate 1.12.0, numpy 1.26.4, opencv-python-headless 4.11.0.86.
 - Running `.venv` from another node (paths written at build time point to `/home/user1/workspace/jingwu/ImageWAMFT`):
   - The interpreter is the uv-managed CPython 3.11.13 at `/home/user1/.local/share/uv/python/cpython-3.11.13-linux-x86_64-gnu/bin/python3.11`. It exists at the same path on `nnmc72`.
   - Console scripts (`.venv/bin/accelerate`, `.venv/bin/torchrun`) have the shebang `/home/user1/workspace/jingwu/ImageWAMFT/.venv/bin/python`, which does not resolve on other nodes. Invoke the tools through `/shared/user71/workspace/jingwu/ImageWAMFT/.venv/bin/python -m accelerate.commands.launch` or `-m torch.distributed.run`.

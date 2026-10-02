@@ -218,6 +218,8 @@ The 8-GPU configuration fits: about 15 GB optimizer shard, 20 GB bf16 weights, g
 
 Rerun the smoke test on the free GPUs with `expandable_segments:True`, and report memory and step time at that GPU count.
 
-Other cluster nodes can provide 8 free GPUs (`PROJECT.md` → Environment → Cluster). A read-only scan on 2026-10-01 found 8/8 idle GPUs on `nnmc57`, `nnmc63` and `nnmc70`. Run the 8-GPU smoke measurement on such a node through `/shared/user71/workspace/jingwu/ImageWAMFT`.
+The allowed nodes are `nnmc61`–`nnmc71`. Only `nnmc71` has 94 GB GPUs (H100 NVL); `nnmc61`–`nnmc70` have 8× L40S with 46 GB each (`PROJECT.md` → Environment → Cluster). The paper's FLUX.2-9B recipe (full fine-tuning, ZeRO-2, 8 GPUs) needs roughly 50 GB per GPU: 20 GB bf16 weights, about 15 GB optimizer shard, gradient partition and buckets, and activations. That does not fit an L40S, which leaves two options:
+- the paper recipe on `nnmc71` when 8 of its GPUs are free;
+- a recipe change for L40S nodes: ZeRO-3, optimizer CPU offload, or multi-node ZeRO-2 over the cluster network.
 
 ## Resolution
