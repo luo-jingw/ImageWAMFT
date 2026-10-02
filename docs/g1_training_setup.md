@@ -46,3 +46,14 @@ Nothing is truncated at `qwen_context_len` 128.
 
 - Training and validation metrics are written to the launcher's standard output by `Trainer`.
 - `wandb` runs in offline mode with no workspace (`wandb.mode: offline`, `wandb.workspace: null`), writing under `<run_dir>/wandb/`. No project wandb identity is configured.
+
+## Gradient Clipping
+
+`ImageWAM/scripts/ds_configs/ds_zero{1,2}_config.json` set `"gradient_clipping": 1.0`. Under DeepSpeed, `Accelerator.clip_grad_norm_` (accelerate 1.12.0) only returns `get_global_grad_norm()`. Clipping is applied by DeepSpeed according to its config.
+
+Measured on a ZeRO-2 engine built through `accelerate launch --config_file scripts/accelerate_configs/accelerate_zero2_ds.yaml` (2 GPUs):
+
+| DeepSpeed config | `engine.gradient_clipping()` | `optimizer.clip_grad` |
+|---|---|---|
+| With `gradient_clipping: 1.0` | 1.0 | 1.0 |
+| Upstream config without the key | 0.0 (no clipping) | 0.0 |

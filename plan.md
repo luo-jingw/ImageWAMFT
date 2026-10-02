@@ -387,7 +387,7 @@ Phase 1 (exclusion mode used by the data config), Phase 2 (FLUX.2 import for the
 
 ## Phase 4
 
-Phase Status: active
+Phase Status: completed
 
 Round: 1
 
@@ -417,7 +417,7 @@ In the Phase 5 run, print DeepSpeed's resolved `gradient_clipping` value from th
 
 ## Phase 5
 
-Phase Status: pending
+Phase Status: active
 
 Round: 3
 
