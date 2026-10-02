@@ -62,7 +62,7 @@ They are recording errors: reset phases recorded as episodes, multiple trials in
 
 ## Next Experiment
 
-Exclude the eleven episodes. `BaseLeRobotDataset._filter_episode_indices` supports only `periodic_prefix`, so exclusion needs either a filtered dataset version or a new explicit-exclusion filter mode.
+Exclude the eleven episodes through a new `explicit_exclude` filter mode (`plan.md` → Phase 1, decision D7).
 
 ## Resolution
 

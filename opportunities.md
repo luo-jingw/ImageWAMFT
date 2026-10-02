@@ -75,3 +75,29 @@ A per-sample ablation showing that these samples measurably affect action loss o
 ## Promotion Condition
 
 Physical-robot failures concentrated in phases that overlap camera stalls.
+
+# OPT-004
+
+Status: Proposed
+
+Area: Qwen-Image-2.1 text conditioning
+
+## Observation
+
+The Qwen-Image-2.1 run conditions on text-only Qwen3-VL features, computed once per prompt with the text-to-image template (`plan.md` → D1). In its image-editing mode, Qwen-Image-2.1 instead feeds the reference image to Qwen3-VL, so the instruction features depend on the image.
+
+## Opportunity
+
+Image-aware instruction features computed once per episode from its first frame, with the editing template. Training stores one feature tensor per episode (339 in total). Inference runs Qwen3-VL once at episode start, so per-step latency is unchanged.
+
+## Expected Mechanism
+
+Instruction features grounded in the episode's initial scene, closer to the editing-mode pretraining distribution.
+
+## Required Evidence
+
+Qwen-Image-2.1 results under D1 compared with the FLUX.2-9B run on the same validation episodes, and per-task physical-robot success.
+
+## Promotion Condition
+
+The Qwen-Image-2.1 run under D1 falls clearly behind expectations, or fails to separate tasks that differ only in instruction or scene.
