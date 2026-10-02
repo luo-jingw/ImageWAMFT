@@ -490,7 +490,7 @@ The session name, node and GPUs are recorded. The first 500 steps have finite lo
 
 ## Phase 7
 
-Phase Status: pending
+Phase Status: completed
 
 Round: 1
 

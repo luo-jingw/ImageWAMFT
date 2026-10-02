@@ -71,6 +71,7 @@ FLUX.2-klein-base-4B, the backbone the paper reports for its real-world experime
     - torchcodec 0.8.1 decodes the LGG100 AV1 videos.
     - All 36,188 installed files match their RECORD hashes.
     - Other versions equal `.venv`: transformers 4.56.1, huggingface-hub 0.36.2, accelerate 1.12.0, numpy 1.26.4, opencv-python-headless 4.11.0.86.
+- Qwen-Image-2.1 reference environment: `.venv-qwenimage` on `nnmc71`. It has torch 2.7.1+cu118, diffusers from git commit `578c9b2c6636ab2424a0e56186268b83623656b2` (0.41.0.dev0), transformers 5.18.0 and huggingface-hub 1.33.0, installed with `--link-mode copy`. It is used offline only, for reference fixtures and Qwen3-VL text features.
 - Running `.venv` from another node (paths written at build time point to `/home/user1/workspace/jingwu/ImageWAMFT`):
   - The interpreter is the uv-managed CPython 3.11.13 at `/home/user1/.local/share/uv/python/cpython-3.11.13-linux-x86_64-gnu/bin/python3.11`. It exists at the same path on `nnmc72`.
   - Console scripts (`.venv/bin/accelerate`, `.venv/bin/torchrun`) have the shebang `/home/user1/workspace/jingwu/ImageWAMFT/.venv/bin/python`, which does not resolve on other nodes. Invoke the tools through `/shared/user71/workspace/jingwu/ImageWAMFT/.venv/bin/python -m accelerate.commands.launch` or `-m torch.distributed.run`.
