@@ -189,3 +189,35 @@ Read Machine Type in the Unitree app (Device → Data → Robot).
 ## Resolution
 
 Arm kinematics use the mode-15 arm chain from `g1_29dof_mode_15_with_dex1_1.urdf`. The wrist-yaw offset uncertainty of up to 5 mm against other 29-DoF revisions is accepted. Gripper and camera hardware are retrofits and are not modeled by the URDF.
+
+# ISSUE-007
+
+Status: Open
+
+Area: compute availability
+
+## Observation
+
+On 2026-10-01, GPUs 0, 2 and 3 of the 8× H100 NVL host were occupied by other users' processes (about 82 GB each), and GPUs 4 and 5 ran other processes at high utilization. GPUs 1, 6 and 7 were free.
+
+A FLUX.2-9B G1 smoke run on GPUs 1, 6 and 7 (ZeRO-2, batch 4 per GPU, gradient accumulation 2) ran out of memory in DeepSpeed `copy_grads_in_partition`. At that point each process used 89.30 GB: 77.28 GB allocated and 10.51 GB reserved but unallocated, and a 6.37 GB allocation failed.
+
+## Impact
+
+The plan's 8-GPU smoke measurements (Phases 5 and 12) cannot be taken while other jobs hold GPUs. ZeRO-2 shards the fp32 optimizer state (about 120 GB for about 10B trainable parameters) across GPUs, so per-GPU memory at 3 GPUs exceeds the 8-GPU configuration by about 25 GB.
+
+## Evidence
+
+`ImageWAM/runs/smoke_logs/flux2_9b.log`, `ImageWAM/runs/smoke_logs/flux2_9b_gpumem.csv`, `nvidia-smi` at launch.
+
+## Hypotheses
+
+The 8-GPU configuration fits: about 15 GB optimizer shard, 20 GB bf16 weights, gradient partition and buckets, and activations. Fragmentation causes the 3-GPU failure, which `PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True` reduces.
+
+## Next Experiment
+
+Rerun the smoke test on the free GPUs with `expandable_segments:True`, and report memory and step time at that GPU count.
+
+Other cluster nodes can provide 8 free GPUs (`PROJECT.md` → Environment → Cluster). A read-only scan on 2026-10-01 found 8/8 idle GPUs on `nnmc57`, `nnmc63` and `nnmc70`. Run the 8-GPU smoke measurement on such a node through `/shared/user71/workspace/jingwu/ImageWAMFT`.
+
+## Resolution

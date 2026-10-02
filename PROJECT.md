@@ -31,6 +31,19 @@ FLUX.2-klein-base-4B, the backbone the paper reports for its real-world experime
 ## Environment
 
 - Platform / hardware: Linux 6.8 with 8× NVIDIA H100 NVL (94 GB each) and driver 580.159.03. The only system CUDA toolkits are 12.4 and 12.6; there is no CUDA 11 toolkit or CUDA 11 NPP library.
+- Cluster: this machine is node 71 (`nnmc71`) of a cluster with nodes `nnmc57`–`nnmc76`. All facts below were verified on 2026-10-01 with read-only commands.
+  - Shared storage: every node mounts every node's `/home/user1` over NFS4 at `/shared/user<N>`, served from `10.145.87.<N>`. `/shared/` also holds `Datasets`.
+  - Project path: on `nnmc71` the project is `/home/user1/workspace/jingwu/ImageWAMFT`. On any node it is `/shared/user71/workspace/jingwu/ImageWAMFT`, which is the same files (identical inode via both paths).
+  - Other nodes' `/home/user1` is their own local disk, and the project does not exist there. On other nodes, use only the `/shared/user71/...` path.
+  - Access: passwordless `ssh nnmc<N>` works from `nnmc71`, and from other nodes back to `nnmc71` (checked with `nnmc72`).
+  - Using another node's GPUs: `ssh nnmc<N>`, then work in `/shared/user71/workspace/jingwu/ImageWAMFT`.
+  - Nodes `nnmc57`–`nnmc72` report 8 GPUs with 95,830 MiB each. Nodes `nnmc73`–`nnmc76` report per-GPU memory use above 96 GB, so their GPU model differs.
+  - GPU availability changes over time; check it with `nvidia-smi` on the target node before launching.
+- Running `.venv` from another node (paths written at build time point to `/home/user1/workspace/jingwu/ImageWAMFT`):
+  - The interpreter is the uv-managed CPython 3.11.13 at `/home/user1/.local/share/uv/python/cpython-3.11.13-linux-x86_64-gnu/bin/python3.11`. It exists at the same path on `nnmc72`.
+  - Console scripts (`.venv/bin/accelerate`, `.venv/bin/torchrun`) have the shebang `/home/user1/workspace/jingwu/ImageWAMFT/.venv/bin/python`, which does not resolve on other nodes. Invoke the tools through `/shared/user71/workspace/jingwu/ImageWAMFT/.venv/bin/python -m accelerate.commands.launch` or `-m torch.distributed.run`.
+  - The editable install (`__editable__.imagewam-0.1.0.pth`) points to `/home/user1/workspace/jingwu/ImageWAMFT/ImageWAM/src`. The launchers prepend `${REPO_ROOT}/src` to `PYTHONPATH`, and `REPO_ROOT` resolves from the script location, so `imagewam` imports when scripts are called through `/shared/user71/...`.
+  - `ImageWAM/.env.local` defaults `PROJECT_ROOT` to the `nnmc71` path. On other nodes, set `PROJECT_ROOT=/shared/user71/workspace/jingwu/ImageWAMFT` in the shell first.
 - Shared with (other users or projects on the same account or machine): other projects run under the same Linux account. The uv cache (`~/.cache/uv`) and the machine-wide Hugging Face token (`~/.cache/huggingface/token`) are shared across them. Packages that uv installs from the cache are hard-linked to cache files that other environments also link to.
 - Constraints imposed by the environment:
   - Python environment: `.venv` (Python 3.11.13). It is managed through `uv venv` / `uv pip`; `uv sync`, `uv lock` and `uv run` are not used. `ImageWAM/uv.lock` is stale relative to `ImageWAM/pyproject.toml`: it has no `shared` extra and pins older transformers and huggingface-hub. Re-locking fails while building `mmcv-full` from the `dim` extra.
