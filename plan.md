@@ -460,7 +460,7 @@ Phases 1, 2, 3, 4
 
 ## Phase 6
 
-Phase Status: active
+Phase Status: completed
 
 Round: 4
 

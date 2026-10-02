@@ -87,3 +87,16 @@ The same failure appeared earlier with FLUX.2-9B on 4 GPUs (≈2.5B per rank), w
 | Peak GPU memory | 62.0 GB per GPU |
 | Checkpoint size | weights 8.5 GB per save; resumable state 60 GB |
 | Projected full run | 27,950 steps × 5.5 s ≈ 43 h plus validation every 500 steps |
+
+## FLUX.2-klein-base-4B Full Run (Phase 6)
+
+- Launch: `launch/g1_flux2_4b_train.sh`, `tmux` session `imagewamft_flux4b`, `nnmc71` GPUs 6,7 (an NVLink pair), `.venv`.
+- Output: `checkpoints/g1_lgg100_flux2_klein_4b_base_imagewam/`, with `train.log`, `config.yaml`, `dataset_stats.json`, `eval/`, offline `wandb/`, and `checkpoints/{weights,state}/`.
+- Recipe: the smoke-test settings for 27,950 steps (10 epochs). Weights are saved every 5,000 steps; only the latest resumable state is kept.
+
+| Measure (first 500 steps) | Value |
+|---|---|
+| Loss | all finite; 3.03 at step 10, 0.22 at step 500 (λ·action 0.080, λ·video 0.136) |
+| Throughput | 0.26–0.27 optimizer steps/s; per micro-batch: forward 0.11 s, backward 0.36 s |
+| Validation, step 500 (2 samples, one per rank) | `val_loss` 0.1645, PSNR 16.97, SSIM 0.756, `action_l2` 0.0601, `action_l1` 0.1215 |
+| Projected wall clock | about 29 h plus validation |
