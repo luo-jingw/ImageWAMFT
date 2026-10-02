@@ -57,3 +57,19 @@ Measured on a ZeRO-2 engine built through `accelerate launch --config_file scrip
 |---|---|---|
 | With `gradient_clipping: 1.0` | 1.0 | 1.0 |
 | Upstream config without the key | 0.0 (no clipping) | 0.0 |
+
+## Optimizer Parameter Groups (DeepSpeed ZeRO-2 Partition Limit)
+
+DeepSpeed 0.18.5 ZeRO-2 flattens each optimizer param group and gives each rank a contiguous partition. When the per-rank partition exceeds 2^31 elements, the gradients come out non-finite from the first optimizer step. DeepSpeed then masks the norm to −1, and the logged `grad_norm` reads 1. Clipping does not engage, and every later loss is NaN.
+
+`Trainer._split_param_groups` (`optimizer_max_group_numel` in `configs/train.yaml`) splits the trainable parameters into AdamW groups of at most N elements, all with identical hyperparameters. Both G1 task configs set `optimizer_max_group_numel: 1000000000`.
+
+Experiment on FLUX.2-klein-base-4B G1, full fine-tuning of about 4.6B trainable parameters. Fixed: ZeRO-2, bf16, 4 per GPU, gradient accumulation 2, lr 1e-4, `gradient_clipping` 1.0, `overlap_comm` true, H100 NVL, `.venv`. Runs: `ImageWAM/runs/smoke_logs/exp008_{A,B,C}.log`.
+
+| Cell | GPUs | Param groups | Per-rank partition (largest group) | Loss, steps 1–18 |
+|---|---|---|---|---|
+| A (`nnmc71`) | 2 | 1 | ≈2.3B elements (> 2^31) | step 1: 3.086; steps 2–20: NaN |
+| B (`nnmc72`) | 4 | 1 | ≈1.15B elements (< 2^31) | finite, 3.71 → 1.96 |
+| C (`nnmc71`) | 2 | 5 (largest 995,773,696) | ≈0.50B elements | finite, 2.95 → 2.51 (range 1.21–4.47) |
+
+The same failure appeared earlier with FLUX.2-9B on 4 GPUs (≈2.5B per rank), while a 9B run with a LoRA video expert (about 1B trainable) on 2 GPUs stayed finite for 200 steps.

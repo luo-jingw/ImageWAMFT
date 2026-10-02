@@ -226,7 +226,7 @@ The allowed nodes are `nnmc61`–`nnmc71`. Only `nnmc71` has 94 GB GPUs (H100 NV
 
 # ISSUE-008
 
-Status: Open
+Status: Resolved
 
 Area: training numerics (FLUX.2-9B, DeepSpeed ZeRO-2)
 
@@ -260,3 +260,8 @@ The FLUX.2-9B run cannot train. The same DeepSpeed path will carry the Qwen-Imag
 - Then run a grid over `gradient_clipping` ∈ {0, 1.0} × `overlap_comm` ∈ {true, false}.
 
 ## Resolution
+
+Cause: a DeepSpeed ZeRO-2 per-rank flat partition larger than 2^31 elements produces non-finite gradients from the first optimizer step. Hypothesis 1 holds in its partition-size form; hypotheses 2 and 3 are refuted, since the loss is finite at step 1 and NaN from step 2 regardless of data.
+- In the 3-cell grid (`docs/g1_training_setup.md` → Optimizer Parameter Groups), only the cell with a partition above 2^31 diverged. Total group size above 2^31 alone (cell B) did not cause it.
+- Fix: `Trainer._split_param_groups` with `optimizer_max_group_numel: 1000000000` in both G1 task configs. Hyperparameters are identical across groups, so only the buffer layout changes.
+- The fix applies equally to the Qwen-Image-2.1 run, which has about 8B trainable parameters.

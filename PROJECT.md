@@ -56,6 +56,7 @@ FLUX.2-klein-base-4B, the backbone the paper reports for its real-world experime
   - The uv-managed CPython that `.venv` links to (`/home/user1/.local/share/uv/python/cpython-3.11.13-linux-x86_64-gnu`) exists on `nnmc72` but not on `nnmc57`. A node-specific environment therefore needs its own `uv venv`.
   - Nodes `nnmc57`–`nnmc72` report 8 GPUs with 95,830 MiB each. Nodes `nnmc73`–`nnmc76` report per-GPU memory use above 96 GB, so their GPU model differs.
   - GPU availability changes over time; check it with `nvidia-smi` on the target node before launching.
+- `nnmc72` (H100 NVL, same uv CPython path as `nnmc71`, system FFmpeg 4, `/usr/local/cuda`) runs the `nnmc71` `.venv` unchanged through the symlink `/home/user1/workspace/jingwu/ImageWAMFT -> /shared/user71/workspace/jingwu/ImageWAMFT`, created on `nnmc72` on 2026-10-01. With it, every absolute path baked into `.venv` resolves; remove the symlink to undo.
 - `nnmc73` environment, used for the B300 GPUs. Run every command from `/shared/user71/workspace/jingwu/ImageWAMFT`.
   - Python environment: `.venv-nnmc73`, built on `nnmc73` with uv:
     1. `uv venv .venv-nnmc73 --python 3.11` (uses the `nnmc73` uv-managed CPython 3.11.15).

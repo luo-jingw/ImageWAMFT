@@ -113,7 +113,7 @@ class Wan22Trainer:
         if not trainable_params:
             raise ValueError("No trainable parameters found after applying trainable policy.")
         self.optimizer = torch.optim.AdamW(
-            trainable_params,
+            self._split_param_groups(trainable_params, self.cfg.get("optimizer_max_group_numel")),
             lr=self.learning_rate,
             weight_decay=self.weight_decay,
             betas=(0.9, 0.95),
@@ -470,6 +470,34 @@ class Wan22Trainer:
         logger.info("Setting DiT to train mode and freezing other model components.")
         model = self.accelerator.unwrap_model(self.model)
         self._apply_dit_only_train_mode(model)
+
+    @staticmethod
+    def _split_param_groups(params: list[torch.nn.Parameter], max_group_numel: int | None) -> list[dict]:
+        """Split trainable params into optimizer groups of at most `max_group_numel` elements.
+
+        DeepSpeed ZeRO-1/2 flattens each param group into one buffer; all groups share the same
+        hyperparameters, so the split changes buffer layout only. `None` keeps a single group.
+        """
+        if not max_group_numel:
+            return [{"params": params}]
+        groups: list[dict] = []
+        current: list[torch.nn.Parameter] = []
+        current_numel = 0
+        for param in params:
+            if current and current_numel + param.numel() > int(max_group_numel):
+                groups.append({"params": current})
+                current, current_numel = [], 0
+            current.append(param)
+            current_numel += param.numel()
+        if current:
+            groups.append({"params": current})
+        logger.info(
+            "Optimizer param groups: %d (max %d elements each; largest %d)",
+            len(groups),
+            int(max_group_numel),
+            max(sum(p.numel() for p in g["params"]) for g in groups),
+        )
+        return groups
 
     @staticmethod
     def _apply_dit_only_train_mode(model):

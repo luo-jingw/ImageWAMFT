@@ -55,6 +55,7 @@ gradient_accumulation_steps: 1
 mixed_precision: "bf16" # one of: [no, fp16, bf16]
 seed: 42
 max_grad_norm: 1.0
+optimizer_max_group_numel: null  # split optimizer param groups (elements per group); null = one group
 weight_decay: 0.0
 resume: null
 
