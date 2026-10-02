@@ -223,3 +223,40 @@ The allowed nodes are `nnmc61`–`nnmc71`. Only `nnmc71` has 94 GB GPUs (H100 NV
 - a recipe change for L40S nodes: ZeRO-3, optimizer CPU offload, or multi-node ZeRO-2 over the cluster network.
 
 ## Resolution
+
+# ISSUE-008
+
+Status: Open
+
+Area: training numerics (FLUX.2-9B, DeepSpeed ZeRO-2)
+
+## Observation
+
+The FLUX.2-9B G1 smoke run (`nnmc71` GPUs 1, 5, 6, 7; ZeRO-2; bf16; batch 4 per GPU; gradient accumulation 2; `gradient_clipping` 1.0) logged `loss=nan`, `loss_action=nan` and `loss_video=nan` at every logged step from step 10 to step 100, and validation at step 100 returned `val_loss=nan` and `action_l2=nan`. The offline wandb history records `train/grad_norm` = 1 at every logged step.
+
+## Impact
+
+The FLUX.2-9B run cannot train. The same DeepSpeed path will carry the Qwen-Image-2.1 run.
+
+## Evidence
+
+- The logged `grad_norm` of exactly 1 means the gradients were non-finite. DeepSpeed 0.18.5 ZeRO-1/2 (`stage_1_and_2.py`) replaces a non-finite partition norm with −1 (`mask_nan_or_inf_with_val_inplace`). The global norm `vector_norm(stack([-1]))` is then 1. The clip coefficient `(norm + 1e-6) / clip_grad` is clamped to at least 1, so nothing is clipped. bf16 mode does not check for overflow, so the non-finite gradients reach the AdamW update.
+- Ruled out on one GPU (`nnmc71` GPU 6) without DeepSpeed, with initial weights and real training batches:
+  - Pure bf16 without autocast, which is what accelerate does under DeepSpeed (`native_amp=False`): 4 batches of 4 samples gave finite losses of 1.6–4.0, finite gradients with norms of 25–67, and no non-finite forward output in any module.
+  - A full-module `.bfloat16()` cast, as DeepSpeed performs: the model has no fp32 buffers, and the results are unchanged.
+  - Inputs, normalization statistics and the action-DiT initialization are finite; the minimum std is 0.145.
+  - No trainable parameter is left without a gradient (0 unused).
+  - The action loss clamps its denominators at 1, so it cannot produce 0/0.
+
+## Hypotheses
+
+1. DeepSpeed ZeRO-2 gradient reduction or partitioning produces non-finite values, through `overlap_comm` with contiguous gradients and accumulation.
+2. The first optimizer updates make the weights unstable, and a later forward or backward pass overflows.
+3. A rare training sample, not among the 16 checked, produces a non-finite gradient.
+
+## Next Experiment
+
+- Reproduce under DeepSpeed with per-step logging (`log_every=1`) to find the first non-finite step. A LoRA-on-video variant fits on 2 H100s.
+- Then run a grid over `gradient_clipping` ∈ {0, 1.0} × `overlap_comm` ∈ {true, false}.
+
+## Resolution

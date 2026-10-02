@@ -27,18 +27,20 @@ Neither target model can be trained on LGG100 with the paper's real-world recipe
 
 ## Goal
 
-1. A FLUX.2-klein-base-9B ImageWAM model trained under these conditions:
+1. A FLUX.2-klein-base-4B ImageWAM model (the backbone of the paper's real-world experiments) trained under these conditions:
    - Data: the 339 valid episodes (181,403 frames) of the four LGG100 roots, jointly.
-   - Length: 10 epochs, about 28.1k optimizer steps at effective batch 64 (4 per GPU × 8 GPUs × gradient accumulation 2).
+   - Length: 10 epochs, 27,950 optimizer steps at effective batch 64 (4 per GPU × 2 GPUs × gradient accumulation 8).
    - Recipe: bf16, AdamW betas (0.9, 0.95), lr 1e-4, weight decay 1e-2, 5% linear warmup then cosine to 0.01× lr, effective gradient clipping 1.0, DeepSpeed ZeRO-2.
+   - Trainable parts follow the paper (§3.2) and repository: the diffusion branch (the whole editing DiT, including its text and image input projections) and the action expert, plus the proprio encoder. The text encoder and the VAE are frozen.
    - Inputs and targets: 3-view 288×256 input, future frame 16 steps ahead, action chunk 16, λ_video 0.5, λ_action 1.0, train shift 5.
-2. A Qwen-Image-2.1 ImageWAM model trained with the same data, split, recipe, length and validation.
-3. Outputs per run:
-   - `checkpoints/weights/step_*.pt` and `dataset_stats.json`;
+2. A Qwen-Image-2.1 ImageWAM model trained with the same data, split, recipe, length, trainable-part policy and validation. Only the backbone-bound components differ: the editing DiT, its text-encoder features, its VAE, and the action-DiT depth, which pairs layer by layer with the backbone.
+3. Outputs per run, under `checkpoints/<run_name>/` at the project root:
+   - weights every 5,000 steps (all kept) and only the latest resumable training state;
+   - `dataset_stats.json`;
    - offline validation metrics on the held-out episodes (one per root), logged during training: `val_loss`, `action_l2`, `action_l1` on de-normalized actions, `psnr_*`, `ssim_*`;
    - the measured step time and peak GPU memory.
 4. The Qwen-Image-2.1 transformer and VAE implementations used in training reproduce the diffusers reference outputs on shared inputs. The per-layer and final maximum absolute differences are reported.
-5. The full training runs (Phases 13 and 14) start only on an explicit launch instruction. All other phases run under the approved plan, including the short smoke runs (Phases 5 and 12, about 200 optimizer steps each).
+5. Each full run is launched in its own `tmux` session on its training node once that model's smoke test passes; launch is authorized. Logging is local only: offline wandb under the run directory plus the launcher log.
 
 Out of scope: physical-robot deployment and evaluation (no G1 policy adapter exists; `experiments/robotwin/imagewam_policy/deploy_policy.py` is the later template), and the FLUX.2-klein-base-4B run.
 
@@ -98,6 +100,9 @@ Constraint check against this goal:
 - **D6 Noise schedule and loss: the ImageWAM schedulers** (`ImageWAM/src/imagewam/models/backbones/schedulers/scheduler_continuous.py`, train shift 5) and the ImageWAM loss weighting, identical to the FLUX.2 run.
 - **D7 Episode exclusion: a new filter mode `explicit_exclude`.** Its configuration maps a dataset root directory name to a list of excluded episode indices. It is applied before the validation split.
 - **D8 Normalization statistics** are computed by `RobotVideoDataset` on the training split of the FLUX.2 run. The Qwen-Image-2.1 run reads the same file through `pretrained_norm_stats`, so both runs normalize identically.
+- **D10 Trainable parts** follow the paper's frozen/trainable split: frozen text encoder (precomputed cache) and VAE; full fine-tuning of the editing DiT, the action DiT and the proprio encoder. LoRA stays disabled.
+- **D11 Compute.** Each model trains on 2 idle GPUs from nodes `nnmc71`–`nnmc75` (at most 4 per node). If a model does not fit at 4 samples per GPU, the micro-batch drops to 2 and gradient accumulation rises to 16, so the effective batch stays 64.
+- **D12 DeepSpeed configuration** changes only as concluded by ISSUE-008, applied identically to both runs.
 - **D9 Code placement.** New Qwen-Image-2.1 logic lives in dedicated files (M7–M10, M12). The shared ImageWAM files (`imagewam.py`, `mot.py`, `runtime.py`, `trainer.py`, `robot_video_dataset.py`) receive only dispatch hooks.
 
 ## Responsibilities
@@ -118,7 +123,7 @@ Constraint check against this goal:
 | FLUX.2 action-DiT initialization | `ImageWAM/scripts/flux2/preprocess_action_dit_flux2.py` → `ImageWAM/checkpoints/action_dit_flux2_9b_g1_init.pt` | `ActionDiTFlux2.from_pretrained` |
 | Qwen-Image action-DiT initialization | `ImageWAM/scripts/qwenimage21/preprocess_action_dit_qwenimage21.py` → `ImageWAM/checkpoints/action_dit_qwenimage21_g1_init.pt` | `ActionDiTQwenImage21.from_pretrained` |
 | Reference fixtures | `ImageWAM/scripts/qwenimage21/dump_reference_fixtures.py` (in `.venv-qwenimage`) → `ImageWAM/data/qwenimage21_fixtures/` | M14 comparison scripts |
-| Trained weights and training state | `Trainer` → `ImageWAM/runs/<task>/<run_id>/checkpoints/` | later deployment |
+| Trained weights and training state | `Trainer` → `checkpoints/<run_name>/checkpoints/{weights,state}/` (project root, git-ignored) | later deployment |
 | Local paths (FLUX.2 source, weights, data root) | `ImageWAM/.env.local`, git-ignored, contents documented in `PROJECT.md` | `ImageWAM/scripts/common.sh` |
 
 # Interface
@@ -288,6 +293,7 @@ All paths are relative to the project root.
 
 # Implementation
 
+
 ## Phase 1
 
 Phase Status: completed
@@ -423,11 +429,11 @@ Round: 3
 
 ### Goal
 
-Run a FLUX.2-9B G1 smoke test on 8 GPUs.
+Run a FLUX.2-klein-base-4B G1 smoke test on 2 GPUs, resolving ISSUE-008 (non-finite gradients under DeepSpeed ZeRO-2) first.
 
 ### Files
 
-none (runtime artifacts only)
+`ImageWAM/configs/task/g1_lgg100_flux2_klein_4b_base_imagewam.yaml` (new), `ImageWAM/.env.local` (git-ignored); any DeepSpeed or trainer change concluded by ISSUE-008
 
 ### Structures
 
@@ -443,15 +449,46 @@ Phases 1, 2, 3, 4
 
 ### Observation
 
-Run the action-DiT initialization (action dim 16) and then 200 optimizer steps. Report:
-- step time;
-- peak memory per GPU;
-- the loss curve, with video and action losses separately;
-- one validation pass (`val_loss`, `action_l2`, `action_l1`, PSNR/SSIM);
-- `dataset_stats.json` dimensions (16);
-- the projected wall-clock time for about 28.1k steps.
+1. Report the ISSUE-008 experiment grid.
+2. Generate the 4B action-DiT initialization (action dim 16) and the Qwen3-4B text cache (4 files `[128, 7680]`).
+3. Run 200 optimizer steps on 2 GPUs (4 per GPU × gradient accumulation 8) and report:
+   - step time;
+   - peak memory per GPU;
+   - finite video and action losses at every step;
+   - one validation pass;
+   - projected wall-clock time for 27,950 steps.
 
 ## Phase 6
+
+Phase Status: pending
+
+Round: 4
+
+### Goal
+
+Launch FLUX.2-klein-base-4B full training (10 epochs) in a `tmux` session on 2 idle GPUs.
+
+### Files
+
+none (runtime artifacts under `checkpoints/g1_lgg100_flux2_klein_4b_base_imagewam/`)
+
+### Structures
+
+none
+
+### Affected Modules
+
+none
+
+### Dependencies
+
+Phase 5
+
+### Observation
+
+The session name, node and GPUs are recorded. The first 500 steps have finite losses, measured throughput and a projected end time. `save_every` is 5,000, and `output_dir` is under `checkpoints/`.
+
+## Phase 7
 
 Phase Status: pending
 
@@ -483,7 +520,7 @@ none
 2. Fixtures are written for one fixed-seed batch: transformer per-block outputs, the final output, VAE latents and reconstruction.
 3. Record the pinned diffusers commit and the transformers and huggingface-hub versions in `PROJECT.md`.
 
-## Phase 7
+## Phase 8
 
 Phase Status: pending
 
@@ -507,14 +544,14 @@ M7, M14
 
 ### Dependencies
 
-Phase 6
+Phase 7
 
 ### Observation
 
 1. `from_pretrained` loads with no missing or unexpected keys; the parameter count is 7,115,124,736.
 2. `check_parity_dit.py` reports the per-block and final maximum absolute and relative differences against the fixtures in bf16 and fp32. The native diffusers mask and order are reproduced through a test-only layout argument.
 
-## Phase 8
+## Phase 9
 
 Phase Status: pending
 
@@ -538,7 +575,7 @@ M8, M14
 
 ### Dependencies
 
-Phase 6
+Phase 7
 
 ### Observation
 
@@ -546,7 +583,7 @@ Phase 6
 2. Report the maximum absolute difference of latents and reconstruction against the fixtures.
 3. Report the PSNR of the reconstruction of 16 G1 tiled frames at 288×256.
 
-## Phase 9
+## Phase 10
 
 Phase Status: pending
 
@@ -570,7 +607,7 @@ M12
 
 ### Dependencies
 
-Phase 3 (G1 data config and prompts), Phase 6 (environment)
+Phase 3 (G1 data config and prompts), Phase 7 (environment)
 
 ### Observation
 
@@ -578,7 +615,7 @@ Phase 3 (G1 data config and prompts), Phase 6 (environment)
 2. A dataset sample built with `qwen_text_cache_format: qwen3vl_qwenimage21` carries those tensors.
 3. The features match a direct pipeline `encode_prompt` call on the same text-only template; report the maximum absolute difference.
 
-## Phase 10
+## Phase 11
 
 Phase Status: pending
 
@@ -602,7 +639,7 @@ M9
 
 ### Dependencies
 
-Phase 7
+Phase 8
 
 ### Observation
 
@@ -610,7 +647,7 @@ Phase 7
 2. `prepare_qkv` output shapes match M7's `[B, L, 4096]`.
 3. A forward pass on random actions gives finite outputs `[B, 16, 16]`.
 
-## Phase 11
+## Phase 12
 
 Phase Status: pending
 
@@ -634,7 +671,7 @@ M10, M11, M13
 
 ### Dependencies
 
-Phases 7, 8, 9, 10
+Phases 8, 9, 10, 11
 
 ### Observation
 
@@ -643,7 +680,7 @@ Phases 7, 8, 9, 10
 3. `infer_action` returns `[1, 16, 16]`.
 4. With identical inputs, `infer_action` with the prefix KV cache equals a full-sequence recomputation within bf16 tolerance; report the maximum absolute difference.
 
-## Phase 12
+## Phase 13
 
 Phase Status: pending
 
@@ -651,7 +688,7 @@ Round: 5
 
 ### Goal
 
-Run a Qwen-Image-2.1 G1 smoke test on 8 GPUs.
+Run a Qwen-Image-2.1 G1 smoke test on 2 GPUs.
 
 ### Files
 
@@ -667,46 +704,11 @@ M9–M13
 
 ### Dependencies
 
-Phases 5 (normalization statistics), 11
+Phases 5 (normalization statistics and ISSUE-008 resolution), 12
 
 ### Observation
 
-Same report as Phase 5:
-- step time;
-- peak memory per GPU, with per-block checkpointing on;
-- loss curve;
-- one validation pass;
-- projected wall-clock time for about 28.1k steps.
-
-## Phase 13
-
-Phase Status: pending
-
-Round: 4
-
-### Goal
-
-Train FLUX.2-klein-base-9B on G1 for the full 10 epochs. Starts on an explicit launch instruction.
-
-### Files
-
-none (runtime artifacts only)
-
-### Structures
-
-none
-
-### Affected Modules
-
-none
-
-### Dependencies
-
-Phase 5
-
-### Observation
-
-Training completes to the scheduled step count. Record the final and best validation metrics, checkpoint paths and total wall-clock time in `docs/g1_training_results.md`.
+Same report as Phase 5, with per-block checkpointing on.
 
 ## Phase 14
 
@@ -716,11 +718,11 @@ Round: 6
 
 ### Goal
 
-Train Qwen-Image-2.1 ImageWAM on G1 for the full 10 epochs. Starts on an explicit launch instruction.
+Launch Qwen-Image-2.1 ImageWAM full training (10 epochs) in a `tmux` session on 2 idle GPUs.
 
 ### Files
 
-none (runtime artifacts only)
+none (runtime artifacts under `checkpoints/g1_lgg100_qwenimage21_imagewam/`)
 
 ### Structures
 
@@ -732,11 +734,11 @@ none
 
 ### Dependencies
 
-Phase 12
+Phase 13
 
 ### Observation
 
-Training completes to the scheduled step count. Record the final and best validation metrics, checkpoint paths and total wall-clock time in `docs/g1_training_results.md`.
+Same as Phase 6.
 
 ## Phase 15
 
@@ -762,7 +764,7 @@ M15
 
 ### Dependencies
 
-Phases 7, 8, 13, 14
+Phases 6, 8, 9, 14, and both runs finished
 
 ### Observation
 

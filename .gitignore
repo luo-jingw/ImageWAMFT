@@ -19,3 +19,6 @@ papers/*.txt
 # Tool-local state
 .aris/
 .claude/settings.local.json
+
+# Trained runs
+checkpoints/
