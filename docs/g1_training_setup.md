@@ -100,3 +100,32 @@ The same failure appeared earlier with FLUX.2-9B on 4 GPUs (≈2.5B per rank), w
 | Throughput | 0.26–0.27 optimizer steps/s; per micro-batch: forward 0.11 s, backward 0.36 s |
 | Validation, step 500 (2 samples, one per rank) | `val_loss` 0.1645, PSNR 16.97, SSIM 0.756, `action_l2` 0.0601, `action_l1` 0.1215 |
 | Projected wall clock | about 29 h plus validation |
+
+## Qwen-Image-2.1 Smoke Test (Phase 13)
+
+`nnmc72` GPUs 4–5 (H100 NVL, an NVLink pair), `.venv` through the `nnmc72` symlink, task `g1_lgg100_qwenimage21_imagewam`, launcher `ImageWAM/scripts/qwenimage21/run_train_qwenimage21_imagewam.sh`. The settings match the FLUX.2-4B smoke test:
+- ZeRO-2 with the same DS JSON, 4 per GPU, gradient accumulation 8 (effective batch 64), `optimizer_max_group_numel` 1e9 (9 groups, largest 996,696,576);
+- `expandable_segments`, 30 steps, validation at steps 15 and 30.
+
+Model-specific settings: whole-layer gradient checkpointing, and normalization statistics from the FLUX.2 run. Logs: `ImageWAM/runs/smoke_logs/smoke_qwenimage21_{a,b_offload,c_probe,d_profile,e}.log`.
+
+| Run | Change | Throughput | Notes |
+|---|---|---|---|
+| a | none | 0.08 steps/s; per micro-batch forward 0.18 s, backward 1.5 s | 30 finite steps; stopped before the step-30 save |
+| b | ZeRO-2 CPU optimizer offload + `DeepSpeedCPUAdam` | 17–20 s per step | stopped after 6 steps; GPU memory 23.6 GB |
+| c | allocator probe, `NCCL_DEBUG=INFO` | 0.08 steps/s | peak allocated 78.2 GiB, 0 allocation retries, 8.5 GiB free; NCCL over P2P/IPC |
+| d | torch-profiler window on rank 0 | — | 3.8 s CPU vs 1.3 s GPU over 2 backward calls; 707k `view_as` in DeepSpeed's gradient hooks (ISSUE-009) |
+| e | `deepspeed_cache_used_param_count` (ISSUE-009 fix) | **0.15 steps/s**; forward 0.18 s, backward 0.69 s | final configuration, below |
+
+Run e results:
+
+| Measure | Value |
+|---|---|
+| Loss | all finite: 2.44 at step 10 (λ·action 2.38, λ·video 0.062), 1.97 at step 20, 1.12 at step 30 |
+| Validation, step 15 (2 samples) | `val_loss` 1.603, PSNR 16.98, SSIM 0.700, `action_l2` 0.345, `action_l1` 0.354 |
+| Validation, step 30 (2 samples) | `val_loss` 3.036, PSNR 13.97, SSIM 0.613, `action_l2` 0.299, `action_l1` 0.352 |
+| Peak GPU memory | 78.2 GiB allocated per GPU (run c) |
+| Checkpoint | weights 15 GB per save, which reload strictly into a fresh model (`mot` and `proprio_encoder`); resumable state 106 GB |
+| Projected full run | 27,950 steps / 0.15 steps/s ≈ 52 h plus validation |
+
+Single-GPU reference without DeepSpeed (batch 4, bf16): forward 0.18 s, backward 0.47 s with whole-layer checkpointing (peak 32 GiB with weights and gradients). Without checkpointing the backward is 0.32 s, but the peak is 55.7 GiB, which leaves no room for the optimizer state on 94 GB.

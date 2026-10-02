@@ -56,6 +56,8 @@ mixed_precision: "bf16" # one of: [no, fp16, bf16]
 seed: 42
 max_grad_norm: 1.0
 optimizer_max_group_numel: null  # split optimizer param groups (elements per group); null = one group
+optimizer_impl: torch_adamw  # deepspeed_cpu_adam with ZeRO optimizer offload (scripts/ds_configs/ds_zero2_offload_config.json)
+deepspeed_cache_used_param_count: true  # speed-only DeepSpeed 0.18 patch (src/imagewam/utils/deepspeed_patches.py)
 weight_decay: 0.0
 resume: null
 

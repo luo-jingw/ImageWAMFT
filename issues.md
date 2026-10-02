@@ -265,3 +265,28 @@ Cause: a DeepSpeed ZeRO-2 per-rank flat partition larger than 2^31 elements prod
 - In the 3-cell grid (`docs/g1_training_setup.md` → Optimizer Parameter Groups), only the cell with a partition above 2^31 diverged. Total group size above 2^31 alone (cell B) did not cause it.
 - Fix: `Trainer._split_param_groups` with `optimizer_max_group_numel: 1000000000` in both G1 task configs. Hyperparameters are identical across groups, so only the buffer layout changes.
 - The fix applies equally to the Qwen-Image-2.1 run, which has about 8B trainable parameters.
+
+# ISSUE-009
+
+Status: Resolved
+
+Area: training throughput (Qwen-Image-2.1, DeepSpeed ZeRO-2)
+
+## Observation
+
+The first Qwen-Image-2.1 G1 smoke run (`nnmc72` GPUs 4,5; ZeRO-2; bf16; 4 per GPU; gradient accumulation 8) trained at 0.08 optimizer steps/s, which projects to about 97 h for 27,950 steps. Per micro-batch, forward took 0.18 s and backward 1.5 s. On one GPU without DeepSpeed, the same model and batch took 0.18 s forward and 0.47 s backward.
+
+## Evidence
+
+- Not memory pressure: an allocator probe on both ranks showed a 78.2 GiB peak, 0 allocation retries and 8.5 GiB free.
+- Not transport: `NCCL_DEBUG=INFO` shows P2P/IPC over the NVLink pair.
+- CPU-side DeepSpeed overhead: a torch-profiler window of two backward calls on rank 0 recorded 3.8 s of CPU and 1.3 s of GPU. Of that, 2.1 s of self-CPU was in `AccumulateGrad`, with 707,404 `aten::view_as` calls.
+- Cause: DeepSpeed 0.18.5 ZeRO-1/2 runs `count_used_parameters_in_backward(all_params_requiring_grad)` inside every gradient hook (`stage_1_and_2.py:1028`). That walks all 594 trainable tensors (`view_as` and a node lookup for each), making one backward O(n²) on the CPU.
+- CPU optimizer offload (ZeRO-2 `offload_optimizer: cpu`, `DeepSpeedCPUAdam`, which matches torch AdamW to 1.4e-6 after 3 steps) ran at 17–20 s per step and does not help.
+
+## Resolution
+
+- `ImageWAM/src/imagewam/utils/deepspeed_patches.py` caches the count per autograd graph task. Within a graph task the count is fixed, because the engine's execution info is set when the task starts. The returned values are therefore identical and only the CPU work changes.
+- Enabled through `deepspeed_cache_used_param_count: true` (default in `configs/train.yaml`) and applied by the trainer before DeepSpeed initialization.
+- Result on the same GPUs: backward 0.69 s per micro-batch and 0.15 steps/s, about 52 h for the full run.
+- The running FLUX.2-4B process started before the patch and has the same overhead on its smaller parameter set. Its math is unaffected.

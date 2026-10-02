@@ -112,12 +112,32 @@ class Wan22Trainer:
             trainable_params.extend(param for param in proprio_encoder.parameters() if param.requires_grad)
         if not trainable_params:
             raise ValueError("No trainable parameters found after applying trainable policy.")
-        self.optimizer = torch.optim.AdamW(
-            self._split_param_groups(trainable_params, self.cfg.get("optimizer_max_group_numel")),
-            lr=self.learning_rate,
-            weight_decay=self.weight_decay,
-            betas=(0.9, 0.95),
-        )
+        if bool(self.cfg.get("deepspeed_cache_used_param_count", True)):
+            from .utils.deepspeed_patches import cache_used_parameter_count
+
+            logger.info("DeepSpeed used-parameter count cached per backward: %s", cache_used_parameter_count())
+        param_groups = self._split_param_groups(trainable_params, self.cfg.get("optimizer_max_group_numel"))
+        optimizer_impl = str(self.cfg.get("optimizer_impl", "torch_adamw"))
+        if optimizer_impl == "torch_adamw":
+            self.optimizer = torch.optim.AdamW(
+                param_groups,
+                lr=self.learning_rate,
+                weight_decay=self.weight_decay,
+                betas=(0.9, 0.95),
+            )
+        elif optimizer_impl == "deepspeed_cpu_adam":
+            # Same AdamW update, executed on the CPU for ZeRO optimizer offload.
+            from deepspeed.ops.adam import DeepSpeedCPUAdam
+
+            self.optimizer = DeepSpeedCPUAdam(
+                param_groups,
+                lr=self.learning_rate,
+                weight_decay=self.weight_decay,
+                betas=(0.9, 0.95),
+                adamw_mode=True,
+            )
+        else:
+            raise ValueError(f"Unsupported optimizer_impl={optimizer_impl!r}; expected torch_adamw or deepspeed_cpu_adam")
         
         self.train_loader = self._build_loader(self.train_dataset, worker_init_fn=worker_init_fn)
         total_train_steps = self._estimate_total_train_steps()

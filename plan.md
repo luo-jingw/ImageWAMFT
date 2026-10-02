@@ -682,7 +682,7 @@ Phases 8, 9, 10, 11
 
 ## Phase 13
 
-Phase Status: active
+Phase Status: completed
 
 Round: 5
 
@@ -712,7 +712,7 @@ Same report as Phase 5, with per-block checkpointing on.
 
 ## Phase 14
 
-Phase Status: pending
+Phase Status: active
 
 Round: 6
 
