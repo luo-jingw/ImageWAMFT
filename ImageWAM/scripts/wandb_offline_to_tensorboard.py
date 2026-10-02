@@ -2,7 +2,8 @@
 
 Reads the `run-*.wandb` record log of each run directory (no wandb login, no network) and writes every history
 scalar (`train/*`, `eval/*`, `performance/*`) at its `_step`, plus the validation videos in `<run>/eval/`
-(first frame of `step_XXXXXX_rank_YYY.mp4`: prediction | VAE reconstruction | ground truth) as images.
+(the single frame of `step_XXXXXX_rank_YYY.mp4`, stacked top to bottom: prediction, VAE reconstruction, ground
+truth) as images.
 The output directory `<logdir>/<name>/` is owned by this script and is rebuilt from scratch at start-up.
 
   python scripts/wandb_offline_to_tensorboard.py --logdir <dir> --run flux4b=<run dir> --run qwenimage21=<run dir>
@@ -86,7 +87,7 @@ class RunMirror:
                 continue
             frame = first_frame(video)
             if frame is not None:
-                tag = f"eval_image/rank_{int(match.group(2))}_pred|vae|gt"
+                tag = f"eval_image/rank_{int(match.group(2))}_top-pred_middle-vae_bottom-gt"
                 self.writer.add_image(tag, frame, global_step=int(match.group(1)))
             self.videos_done.add(video)
         self.writer.flush()
