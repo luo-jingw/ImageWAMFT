@@ -1,0 +1,19 @@
+# Credentials
+HF_TOKEN
+
+# Environments and caches
+.venv/
+__pycache__/
+*.pyc
+
+# Large local artifacts: datasets and base weights live outside version control
+dataset/
+BaseModel/
+tmp/
+
+# Derived files
+papers/*.txt
+
+# Tool-local state
+.aris/
+.claude/settings.local.json
