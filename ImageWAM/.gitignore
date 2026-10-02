@@ -275,7 +275,6 @@ attention_viz_collected/
 attention_viz_robotwin_smoke/
 third_party/LIBERO
 third_party/LIBERO-plus
-third_party/flux2
 third_party/OmniGen2
 third_party/RoboTwin/assets/*
 !third_party/RoboTwin/assets/

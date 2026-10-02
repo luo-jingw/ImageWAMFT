@@ -73,11 +73,18 @@ Do not record token values or other secrets here.
   - `Qwen3-4B/`: text encoder for 4B
   - `Qwen-Image-2.1/`: full diffusers pipeline with transformer, Qwen3-VL-8B text_encoder, vae, processor and scheduler
 - `ImageWAM/` is a vendored copy of `https://github.com/yuyangalin/ImageWAM.git` at commit `5d4a341ed20a95cdb08f0293f3d44778b9a9e05a`, tracked as plain files in this repository. All 940 files were verified identical to that commit at import, and project changes are committed here. The upstream history is kept, git-ignored, at `tmp/imagewam_upstream_5d4a341.git`. `ImageWAM/.gitignore` ignores `*.txt`, so new `.txt` files under `ImageWAM/` need `git add -f`.
+- `ImageWAM/third_party/flux2/` is a vendored copy of `https://github.com/black-forest-labs/flux2` at commit `50fe5162777813d869182b139e83b10743caef15` (code under Apache-2.0). It was taken with `git archive`, and the `assets/` images were left out. Training puts `third_party/flux2/src` on `PYTHONPATH` through `FLUX2_SRC`.
+- `ImageWAM/.env.local` (git-ignored) is sourced by `ImageWAM/scripts/common.sh`. It sets:
+  - `PROJECT_ROOT`, `DATA_ROOT=<project>/dataset`, `MODEL_ROOT=<project>/BaseModel`, `PYTHON_BIN=<project>/.venv/bin/python`;
+  - `HF_HUB_OFFLINE=1`;
+  - `FLUX2_SRC`, `FLUX2_VARIANT=9b`, `FLUX2_AE_MODEL_PATH`, `ZERO_STAGE=2`;
+  - `FLUX2_QWEN3_MODEL_SPEC`: the local `Qwen3-8B` for `9b`, the local `Qwen3-4B` for `4b`.
+  Values set in the calling shell take precedence.
 - FLUX.2 weights are under the FLUX Non-Commercial License. Qwen-Image-2.1 is under the Qwen Research License.
 - The FLUX.2 path requires `transformers==4.56.1`. The reference implementation of Qwen-Image-2.1 is only in diffusers git main (from commit `6256aa7`, version 0.41.0.dev0, which requires `huggingface-hub>=1.32`). Its Qwen3-VL text encoder needs transformers ≥ 4.57, and with that hub constraint transformers 5.x. Neither fits the `.venv` stack.
 
 ## Onboarding
 
 - Read `AGENTS.md`, this file, `papers/ImageWAM_2606.19531.pdf`, `docs/imagewam_paper_recipe.md` and `docs/lgg100_dataset.md`.
-- Activate the environment with `source .venv/bin/activate`.
+- Activate the environment with `source .venv/bin/activate`. The training launchers call `accelerate` from `PATH`.
 - Download from Hugging Face with the project token only: `HF_TOKEN="$(tr -d '[:space:]' < HF_TOKEN)" hf download ...`.

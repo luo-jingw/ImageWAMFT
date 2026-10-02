@@ -320,7 +320,7 @@ Construct the training and validation datasets over the four roots with the excl
 
 ## Phase 2
 
-Phase Status: active
+Phase Status: completed
 
 Round: 1
 
@@ -354,7 +354,7 @@ Then build `Flux2VideoExpert.from_pretrained` for 9B on the meta device. Print t
 
 ## Phase 3
 
-Phase Status: pending
+Phase Status: active
 
 Round: 2
 
