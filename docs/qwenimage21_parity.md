@@ -29,3 +29,33 @@ Relative diff is the max abs diff divided by the reference's max abs value.
 ## Zero-Shot Edit
 
 `ImageWAM/data/qwenimage21_fixtures/edit_sample.png`: `QwenImage21Pipeline` at 288×256 (`output_resolution` 272, 40 steps) on the current frame with the drawer instruction. The output keeps the three-view tiling (head view on top, two wrist views below) and shows the right arm holding the purple cube toward the open drawer.
+
+## VAE (`QwenImage21VAE`)
+
+Vendored from diffusers `AutoencoderKLQwenImage21` (single-image encode/decode path) into `ImageWAM/src/imagewam/models/backbones/qwenimage21_vae.py`.
+- `encode` takes RGB in [-1, 1], appends an opaque alpha channel and returns the posterior mode normalized per channel with `latents_mean` / `latents_std`, shape [B, 64, H/16, W/16].
+- `decode` inverts both steps and clamps the output to [-1, 1].
+- Parameter count: 337,740,404 (encoder 78,675,680, decoder 259,044,052), with strict key match.
+
+Check: `ImageWAM/scripts/qwenimage21/check_parity_vae.py`, fp32 on CPU.
+- Vendored vs diffusers, both on CPU: latents and reconstructions are bitwise identical (`torch.equal`) for both fixture frames.
+- Against the stored `vae.pt`: latents max abs 2.99e-2 / 1.18e-1 (current / target), reconstruction max abs 3.16e-3 / 4.44e-3. Diffusers on CPU shows exactly the same gap to the fixture.
+- Cause of that gap: the fixture was dumped on GPU, where cuDNN convolutions use TF32 by default. Rounding the conv inputs and weights to TF32 on CPU reproduces a gap of the same size.
+- The transformer fixture is unaffected: matmul TF32 is off by default, and the fp32 DiT parity above is at float-noise level.
+
+Reconstruction PSNR on 16 G1 tiled frames (frames t and t+16 of 8 validation samples spread over all four datasets, 288×256, one H100, TF32 off):
+
+| VAE dtype | Mean PSNR | Min | Max |
+|---|---|---|---|
+| fp32 | 44.58 dB | 42.99 dB | 45.76 dB |
+| bf16 | 44.36 dB | 42.81 dB | 45.57 dB |
+
+The normalized latents of these frames have mean −0.065 and std 1.12.
+
+## Text Cache
+
+`ImageWAM/scripts/qwenimage21/precompute_qwenimage21_text_embeds.py` (run in `.venv-qwenimage`) writes one file per prompt to `ImageWAM/data/g1_lgg100/qwenimage21_text_cache/`.
+- File name: `<sha256(prompt)>.qwen3vl_qwenimage21_len128.pt`.
+- Contents: `text_hidden_states` [128, 4096] bf16, zero-padded, and `text_attention_mask` [128] bool.
+- The cached features equal `text_embeds.pt` exactly (max abs diff 0) for all four prompts. The padding rows are all zero.
+- `RobotVideoDataset` with `qwen_text_cache_format: qwen3vl_qwenimage21` returns these tensors for all four instructions. Valid lengths are 59, 60, 40 and 57.

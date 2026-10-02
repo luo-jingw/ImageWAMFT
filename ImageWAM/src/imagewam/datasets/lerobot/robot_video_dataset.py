@@ -407,11 +407,12 @@ class RobotVideoDataset(torch.utils.data.Dataset):
         suffix_by_format = {
             "qwen2_5_vl": "qwen2_5_vl",
             "qwen3_flux2": "qwen3_flux2",
+            "qwen3vl_qwenimage21": "qwen3vl_qwenimage21",
         }
         if self.qwen_text_cache_format not in suffix_by_format:
             raise ValueError(
                 f"Unsupported qwen_text_cache_format={self.qwen_text_cache_format!r}; "
-                "expected 'qwen2_5_vl' or 'qwen3_flux2'."
+                "expected 'qwen2_5_vl', 'qwen3_flux2' or 'qwen3vl_qwenimage21'."
             )
         suffix = suffix_by_format[self.qwen_text_cache_format]
         cache_path = os.path.join(cache_dir, f"{hashed}.{suffix}_len{self.qwen_context_len}.pt")
@@ -419,7 +420,9 @@ class RobotVideoDataset(torch.utils.data.Dataset):
             raise FileNotFoundError(
                 f"Missing Qwen text embedding cache: {cache_path}. "
                 "Use qwen_text_cache_format='qwen2_5_vl' with scripts/omnigen2/precompute_qwen_embeds.py, "
-                "or qwen_text_cache_format='qwen3_flux2' with scripts/flux2/precompute_flux2_qwen3_embeds.py."
+                "qwen_text_cache_format='qwen3_flux2' with scripts/flux2/precompute_flux2_qwen3_embeds.py, "
+                "or qwen_text_cache_format='qwen3vl_qwenimage21' with "
+                "scripts/qwenimage21/precompute_qwenimage21_text_embeds.py."
             )
         payload = torch.load(cache_path, map_location="cpu")
         context = payload["text_hidden_states"]
