@@ -330,9 +330,26 @@ class BaseLerobotDataset(torch.utils.data.Dataset):
                 ep_idx for ep_idx in episode_indices
                 if ((int(ep_idx) - offset) % period) < keep_first
             ]
+        if mode == "explicit_exclude":
+            # exclude: {<dataset root directory name>: [episode_index, ...]}
+            exclude_by_root = cfg.get("exclude") or {}
+            known_roots = {Path(ds_dir).name for ds_dir in self.dataset_dirs}
+            unknown_roots = sorted(set(exclude_by_root.keys()) - known_roots)
+            if unknown_roots:
+                raise ValueError(
+                    f"episode_index_filter.exclude names unknown dataset roots {unknown_roots}; "
+                    f"known roots: {sorted(known_roots)}."
+                )
+            excluded = {int(ep_idx) for ep_idx in exclude_by_root.get(Path(repo_id).name, [])}
+            missing = sorted(excluded - {int(ep_idx) for ep_idx in episode_indices})
+            if missing:
+                raise ValueError(
+                    f"episode_index_filter.exclude lists episodes {missing} that do not exist in {repo_id!r}."
+                )
+            return [ep_idx for ep_idx in episode_indices if int(ep_idx) not in excluded]
         raise ValueError(
             f"Unsupported episode_index_filter.mode={mode!r} for repo_id={repo_id!r}. "
-            "Expected one of: periodic_prefix."
+            "Expected one of: periodic_prefix, explicit_exclude."
         )
 
     def _get_action(self, meta, lerobot_sample) -> torch.Tensor:

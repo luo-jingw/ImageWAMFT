@@ -128,3 +128,14 @@ Without these 11 episodes, 339 episodes and 181,403 frames remain:
 | biomanual | 49 | 19,943 | 11.0% |
 | simple-pick | 91 | 18,463 | 10.2% |
 | Stack-the-cubes | 99 | 95,256 | 52.5% |
+
+### Training and Validation Split
+
+Measured with `BaseLerobotDataset` using `episode_index_filter: {mode: explicit_exclude}` (the 11 invalid episodes above) and `val_set_proportion: 0.01`, `val_split_level: episode`, seed 42:
+
+| Split | Episodes | Frames |
+|---|---|---|
+| Training | 335 | 178,864 |
+| Validation | 4: episode 8 of each root (drawer 496, biomanual 363, simple-pick 210, Stack-the-cubes 1,470 frames) | 2,539 |
+
+At effective batch 64 (4 per GPU × 8 GPUs × gradient accumulation 2), one epoch is 2,795 optimizer steps, so 10 epochs are 27,950 steps.

@@ -290,7 +290,7 @@ All paths are relative to the project root.
 
 ## Phase 1
 
-Phase Status: pending
+Phase Status: completed
 
 Round: 1
 
@@ -320,7 +320,7 @@ Construct the training and validation datasets over the four roots with the excl
 
 ## Phase 2
 
-Phase Status: pending
+Phase Status: active
 
 Round: 1
 
