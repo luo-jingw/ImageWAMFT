@@ -1,0 +1,51 @@
+# @package _global_
+# FLUX.2-klein-base-9B ImageWAM on the LGG100 Unitree G1 data (paper real-world recipe).
+
+defaults:
+  - override /data: g1_lgg100
+  - override /model: imagewam_flux2_klein_9b_base
+  - _self_
+
+data:
+  train:
+    require_text_cache: false
+    qwen_text_cache_dir: ???
+    qwen_context_len: 128
+    qwen_text_cache_format: qwen3_flux2
+  val:
+    require_text_cache: false
+    qwen_text_cache_dir: ???
+    qwen_context_len: 128
+    qwen_text_cache_format: qwen3_flux2
+
+batch_size: 4
+num_workers: 24
+prefetch_factor: 2
+persistent_workers: true
+keep_latest_state_only: true
+
+lr_scheduler_type: "cosine"
+learning_rate: 1e-4
+num_epochs: 10
+max_steps: null
+log_every: 10
+save_every: 2500
+eval_every: 500
+
+gradient_accumulation_steps: 2
+weight_decay: 1e-2
+max_grad_norm: 1.0
+mixed_precision: "bf16"
+resume: null
+
+model:
+  proprio_dim: ${data.train.processor.proprio_output_dim}
+  qwen_context_len: 128
+
+# No project wandb identity is configured: log to local offline files under the run directory.
+wandb:
+  enabled: true
+  workspace: null
+  project: imagewam
+  name: g1_lgg100_flux2_klein_9b_base_imagewam
+  mode: offline

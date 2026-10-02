@@ -7,7 +7,7 @@ source "${SCRIPT_DIR}/../common.sh"
 imagewam_init "${SCRIPT_DIR}/../.."
 
 GPU_PER_NODE="${GPU_PER_NODE:-8}"
-TASK_TYPE="${TASK_TYPE:-robotwin}"        # libero | robotwin
+TASK_TYPE="${TASK_TYPE:-robotwin}"        # libero | robotwin | g1
 FLUX2_VARIANT="${FLUX2_VARIANT:-4b}"      # 4b | 9b
 ZERO_STAGE="${ZERO_STAGE:-1}"             # 1 | zero1 | 2 | zero2
 PRECOMPUTE_QWEN3_CACHE="${PRECOMPUTE_QWEN3_CACHE:-false}"
@@ -74,7 +74,27 @@ case "${TASK_TYPE}" in
       "model.proprio_dim=14"
     )
     ;;
-  *) echo "Invalid TASK_TYPE=${TASK_TYPE}; expected libero or robotwin" >&2; exit 1 ;;
+  g1)
+    # LGG100 Unitree G1 data: 4 roots trained jointly, 16-dim joint action/state, no non-idle filter.
+    ACTION_DIM=16
+    TASK_NAME="g1_lgg100_${TASK_SUFFIX}"
+    G1_ROOT="${G1_ROOT:-${DATA_ROOT}/LGG100}"
+    G1_DATASET_DIRS="[${G1_ROOT}/drawer,${G1_ROOT}/biomanual,${G1_ROOT}/simple-pick,${G1_ROOT}/Stack-the-cubes]"
+    QWEN_CACHE_DIR="${QWEN_CACHE_DIR:-${REPO_ROOT}/data/g1_lgg100/flux2_qwen3_cache_${FLUX2_VARIANT}}"
+    DATASET_OVERRIDES=(
+      "data.train.dataset_dirs=${G1_DATASET_DIRS}"
+      "data.val.dataset_dirs=${G1_DATASET_DIRS}"
+      "data.train.qwen_text_cache_dir=${QWEN_CACHE_DIR}"
+      "data.val.qwen_text_cache_dir=${QWEN_CACHE_DIR}"
+      "data.train.qwen_context_len=128"
+      "data.val.qwen_context_len=128"
+      "data.train.qwen_text_cache_format=qwen3_flux2"
+      "data.val.qwen_text_cache_format=qwen3_flux2"
+      "model.qwen_context_len=128"
+      "model.proprio_dim=16"
+    )
+    ;;
+  *) echo "Invalid TASK_TYPE=${TASK_TYPE}; expected libero, robotwin or g1" >&2; exit 1 ;;
 esac
 
 ACTION_INIT="${ACTION_INIT:-checkpoints/action_dit_flux2_${FLUX2_VARIANT}_${TASK_TYPE}_init.pt}"

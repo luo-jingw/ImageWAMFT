@@ -354,7 +354,7 @@ Then build `Flux2VideoExpert.from_pretrained` for 9B on the meta device. Print t
 
 ## Phase 3
 
-Phase Status: active
+Phase Status: completed
 
 Round: 2
 
@@ -387,7 +387,7 @@ Phase 1 (exclusion mode used by the data config), Phase 2 (FLUX.2 import for the
 
 ## Phase 4
 
-Phase Status: pending
+Phase Status: active
 
 Round: 1
 
