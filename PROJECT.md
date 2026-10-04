@@ -37,9 +37,7 @@ FLUX.2-klein-base-4B, the backbone the paper reports for its real-world experime
   - Other nodes' `/home/user1` is their own local disk, and the project does not exist there. On other nodes, use only the `/shared/user71/...` path.
   - Access: passwordless `ssh nnmc<N>` works from `nnmc71`, and from other nodes back to `nnmc71` (checked with `nnmc72`).
   - Using another node's GPUs: `ssh nnmc<N>`, then work in `/shared/user71/workspace/jingwu/ImageWAMFT`.
-  - Allowed nodes for this project: `nnmc61`–`nnmc71`.
-  - GPU policy (2026-10-01): idle GPUs on nodes `nnmc71`–`nnmc75` may be used directly, at most 4 GPUs per node. Training uses 2 GPUs per model, and GPUs that other users occupy are not used.
-  - GPU policy: idle GPUs on `nnmc71`–`nnmc75` may be used, at most 4 per node; GPUs with another user's process are never used. All nodes run jobs from other people under the same `user1` account, so a process counts as this project's only when its command line contains `ImageWAMFT`.
+  - Allowed nodes and GPU policy: nodes `nnmc61`–`nnmc71` were granted first; idle GPUs on `nnmc71`–`nnmc75` may be used directly, at most 4 per node. GPUs with another user's process are never used. Each model trains on 2 GPUs unless its memory needs more: FLUX.2-9B needs one B300 or four H100. All nodes run jobs from other people under the same `user1` account, so a process counts as this project's only when its command line contains `ImageWAMFT`.
   - `nnmc73`–`nnmc75` have 8× B300 SXM6 AC with 275,040 MiB, compute capability 10.3. `nnmc73`: driver 595.71.05 (CUDA 13.2), no CUDA toolkit in `/usr/local`, Ubuntu 24.04, uv 0.11.28. `nnmc74` and `nnmc75` lack the uv CPython 3.11.15 that `.venv-nnmc73` links to, so that environment runs on `nnmc73` only.
   - A node may need its own Python environment, because GPU models, CUDA toolkits and uv-managed interpreters differ between nodes. Each node gets its own uv environment built with the `.venv` recipe below, and rebuilding per node is acceptable.
   - Hardware of the allowed nodes (read-only survey, 2026-10-01). All have `uv` at `/home/user1/.local/bin/uv` and 128 CPUs, except `nnmc71` with 96:
@@ -72,6 +70,11 @@ FLUX.2-klein-base-4B, the backbone the paper reports for its real-world experime
     - torchcodec 0.8.1 decodes the LGG100 AV1 videos.
     - All 36,188 installed files match their RECORD hashes.
     - Other versions equal `.venv`: transformers 4.56.1, huggingface-hub 0.36.2, accelerate 1.12.0, numpy 1.26.4, opencv-python-headless 4.11.0.86.
+- B300 environment for `nnmc73`–`nnmc75`: `.venv-b300`. Run every command from `/shared/user71/workspace/jingwu/ImageWAMFT`.
+  - Interpreter: `.uv-python/cpython-3.11.15-linux-x86_64-gnu`, a copy of the uv-managed CPython 3.11.15 from `nnmc73` (`/shared/user73/.local/share/uv/python/`). It lives in the project, so the environment resolves on every node through `/shared/user71`; `nnmc74` has no uv and `nnmc75` has no CPython 3.11.15 of its own.
+  - Build: `node_env/build_venv_b300.sh`, run on `nnmc75` with the `nnmc73` uv 0.11.28 (`/shared/user73/.local/bin/uv`) and the uv cache in `tmp/uv-cache-b300`; same steps 2–4 as `.venv-nnmc73`.
+  - Runtime: `source node_env/b300.sh`, the `nnmc73.sh` settings with `.venv-b300`.
+  - Verified on 2026-10-03: `uv pip freeze` equals `.venv-nnmc73` (120 packages); on `nnmc74` and `nnmc75`, torch 2.9.1+cu130, DeepSpeed 0.18.5 and imagewam import, torchcodec decodes the LGG100 AV1 videos, and the DeepSpeed patch applies. All three nodes run driver 595.71.05 on Ubuntu 24.04 (glibc 2.39). The GPU path is the same torch build verified on `nnmc73`.
 - Qwen-Image-2.1 reference environment: `.venv-qwenimage` on `nnmc71`. It has torch 2.7.1+cu118, diffusers from git commit `578c9b2c6636ab2424a0e56186268b83623656b2` (0.41.0.dev0), transformers 5.18.0 and huggingface-hub 1.33.0, installed with `--link-mode copy`. It is used offline only, for reference fixtures and Qwen3-VL text features.
 - Running `.venv` from another node (paths written at build time point to `/home/user1/workspace/jingwu/ImageWAMFT`):
   - The interpreter is the uv-managed CPython 3.11.13 at `/home/user1/.local/share/uv/python/cpython-3.11.13-linux-x86_64-gnu/bin/python3.11`. It exists at the same path on `nnmc72`.

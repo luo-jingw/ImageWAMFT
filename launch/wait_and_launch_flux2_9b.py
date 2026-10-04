@@ -5,7 +5,7 @@ Runs on nnmc71 in tmux and polls the nodes over ssh every POLL_SECONDS. A GPU co
 process, uses < 1000 MiB and reports < 5 % utilization; a placement starts only after the same GPUs were idle in
 STREAK consecutive polls. At most 4 GPUs per node are used by this project, counting running ImageWAMFT processes.
 Placements in order of preference:
-  2 x B300 on nnmc73  ->  4 x H100 on nnmc71 or nnmc72  ->  1 x B300 on nnmc73
+  2 x B300 on one of nnmc73-75  ->  4 x H100 on nnmc71 or nnmc72  ->  1 x B300 on one of nnmc73-75
 After launching it waits for "step=1/" in the run log. On an error it stops the tmux session it started and exits
 non-zero instead of retrying.
 """
@@ -23,10 +23,14 @@ SESSION = "imagewamft_flux9b"
 RUN_LOG = Path("/home/user1/workspace/jingwu/ImageWAMFT/checkpoints/g1_lgg100_flux2_klein_9b_base_imagewam/train.log")
 LAUNCHERS = {
     "nnmc73": "/shared/user71/workspace/jingwu/ImageWAMFT/launch/g1_flux2_9b_train.sh",
+    "nnmc74": "/shared/user71/workspace/jingwu/ImageWAMFT/launch/g1_flux2_9b_train.sh",
+    "nnmc75": "/shared/user71/workspace/jingwu/ImageWAMFT/launch/g1_flux2_9b_train.sh",
     "nnmc71": "/home/user1/workspace/jingwu/ImageWAMFT/launch/g1_flux2_9b_train.sh",
     "nnmc72": "/home/user1/workspace/jingwu/ImageWAMFT/launch/g1_flux2_9b_train.sh",
 }
 NVLINK_PAIRS = [(0, 1), (2, 3), (4, 5), (6, 7)]
+B300_NODES = ("nnmc73", "nnmc74", "nnmc75")
+H100_NODES = ("nnmc71", "nnmc72")
 
 
 @dataclass
@@ -78,17 +82,20 @@ def pick_h100(idle: list[int]) -> list[int] | None:
 
 def candidates(states: dict[str, NodeState]) -> list[tuple[str, list[int]]]:
     out = []
-    b300 = states.get("nnmc73")
-    if b300 is not None and 4 - b300.ours >= 2 and len(b300.idle) >= 2:
-        out.append(("nnmc73", sorted(b300.idle)[:2]))
-    for node in ("nnmc71", "nnmc72"):
+    for node in B300_NODES:
+        b300 = states.get(node)
+        if b300 is not None and 4 - b300.ours >= 2 and len(b300.idle) >= 2:
+            out.append((node, sorted(b300.idle)[:2]))
+    for node in H100_NODES:
         state = states.get(node)
         if state is not None and 4 - state.ours >= 4:
             choice = pick_h100(state.idle)
             if choice:
                 out.append((node, choice))
-    if b300 is not None and 4 - b300.ours >= 1 and len(b300.idle) >= 1:
-        out.append(("nnmc73", sorted(b300.idle)[:1]))
+    for node in B300_NODES:
+        b300 = states.get(node)
+        if b300 is not None and 4 - b300.ours >= 1 and len(b300.idle) >= 1:
+            out.append((node, sorted(b300.idle)[:1]))
     return out
 
 
@@ -122,7 +129,7 @@ def main() -> None:
     streaks: dict[tuple[str, tuple[int, ...]], int] = {}
     while True:
         states = {}
-        for node in ("nnmc73", "nnmc71", "nnmc72"):
+        for node in B300_NODES + H100_NODES:
             try:
                 states[node] = node_state(node)
             except Exception as error:  # node unreachable this round

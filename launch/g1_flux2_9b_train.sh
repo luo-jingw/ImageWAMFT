@@ -2,17 +2,17 @@
 # Full G1 training of FLUX.2-klein-base-9B ImageWAM: same recipe, data and text features as
 # launch/g1_flux2_4b_train.sh, normalization statistics from the FLUX.2-4B run (plan.md D8).
 # Effective batch 64 = 4 per GPU x number of GPUs x gradient accumulation. About 10B parameters are trained, so it
-# needs one B300 on nnmc73 (.venv-nnmc73) or four H100 on nnmc71/nnmc72 (.venv):
-#   GPUS=6 bash /shared/user71/workspace/jingwu/ImageWAMFT/launch/g1_flux2_9b_train.sh          # nnmc73
+# needs one B300 on nnmc73 (.venv-nnmc73) or nnmc74/nnmc75 (.venv-b300), or four H100 on nnmc71/nnmc72 (.venv):
+#   GPUS=6 bash /shared/user71/workspace/jingwu/ImageWAMFT/launch/g1_flux2_9b_train.sh          # nnmc73-75
 #   GPUS=0,1,2,3 bash /home/user1/workspace/jingwu/ImageWAMFT/launch/g1_flux2_9b_train.sh   # nnmc71 / nnmc72
 # Resume after an interruption by appending the latest state directory:
 #   GPUS=6 bash .../launch/g1_flux2_9b_train.sh resume=<OUT>/checkpoints/state/step_XXXXXX
 set -euo pipefail
 
 case "$(hostname)" in
-  nnmc73) PROJECT_ROOT=/shared/user71/workspace/jingwu/ImageWAMFT ;;
+  nnmc73|nnmc74|nnmc75) PROJECT_ROOT=/shared/user71/workspace/jingwu/ImageWAMFT ;;
   nnmc71|nnmc72) PROJECT_ROOT=/home/user1/workspace/jingwu/ImageWAMFT ;;
-  *) echo "No verified environment for $(hostname); use nnmc73 or nnmc71/nnmc72" >&2; exit 2 ;;
+  *) echo "No verified environment for $(hostname); use nnmc71-nnmc75" >&2; exit 2 ;;
 esac
 RUN_NAME=g1_lgg100_flux2_klein_9b_base_imagewam
 OUT="${PROJECT_ROOT}/checkpoints/${RUN_NAME}"
@@ -28,11 +28,11 @@ NORM_STATS="${PROJECT_ROOT}/checkpoints/g1_lgg100_flux2_klein_4b_base_imagewam/d
 mkdir -p "${OUT}"
 cp -n "${NORM_STATS}" "${OUT}/dataset_stats.json"
 # shellcheck disable=SC1091
-if [ "$(hostname)" = "nnmc73" ]; then
-  source "${PROJECT_ROOT}/node_env/nnmc73.sh"
-else
-  source "${PROJECT_ROOT}/.venv/bin/activate"
-fi
+case "$(hostname)" in
+  nnmc73) source "${PROJECT_ROOT}/node_env/nnmc73.sh" ;;
+  nnmc74|nnmc75) source "${PROJECT_ROOT}/node_env/b300.sh" ;;
+  *) source "${PROJECT_ROOT}/.venv/bin/activate" ;;
+esac
 cd "${PROJECT_ROOT}/ImageWAM"
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 export MASTER_PORT="${MASTER_PORT:-29531}"
