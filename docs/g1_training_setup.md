@@ -187,3 +187,32 @@ Conclusions:
 - For the same input, two seeds differ by about 3 frames in best k, so a single validation image carries a large stochastic timing spread.
 - From FLUX.2 step 5000 to 10000 the offset shrinks to about 2–3 frames, the seed spread to about 2 frames, and PSNR at k = 0 rises by about 0.5 dB. The bias is decreasing with training.
 - By design (D2) the image branch does not attend to the action tokens. It must infer the 16-frame progress from one frame, the joint state and the instruction, with no velocity input. A conservative, slower predicted progress is the expected early-training behavior.
+
+## Video Loss Across Backbones (2026-10-04)
+
+`train/loss_video` is an MSE in each backbone's own VAE latent space, so its value is not comparable between FLUX.2 and Qwen-Image-2.1.
+
+Latent scale (`ImageWAM/scripts/analyze_latent_scales.py`): 64 validation pairs (frames t and t+16), encoded with each frozen VAE as in training, per latent element.
+
+| VAE | Token × dims | E[z²] | E[(z_{t+16} − z_t)²] | change / E[z²] | E[(noise − z)²] |
+|---|---|---|---|---|---|
+| FLUX.2 AE | 288 × 128 | 0.908 | 0.395 | 0.436 | 1.907 |
+| Qwen-Image-2.1 VAE | 288 × 64 | 1.259 | 0.157 | 0.125 | 2.253 |
+
+Training and validation, mean over the logged points of steps 20,000–27,950. Training values are logged every 10 steps (273 points); validation every 500 steps with 2 samples each (16 evaluations).
+
+| Metric | FLUX.2-4B | Qwen-Image-2.1 |
+|---|---|---|
+| `train/loss_video` (λ·MSE) | 0.0890 | 0.0331 |
+| `train/loss_video` ÷ latent change E[(z_{t+16} − z_t)²] | 0.225 | 0.210 |
+| `train/loss_action` | 0.0047 | 0.0049 |
+| `eval/psnr_rg` (prediction vs ground truth, dB) | 21.63 | 21.67 |
+| `eval/ssim_rg` | 0.838 | 0.835 |
+| `eval/psnr_dg` (VAE reconstruction vs ground truth, dB) | 43.33 | 43.51 |
+| `eval/action_l1` (rad) | 0.0206 | 0.0201 |
+| `eval/action_l2` (rad²) | 0.0026 | 0.0025 |
+
+- The same 16-frame change is 2.5× smaller per element in the Qwen-Image-2.1 latent space, and the video loss is 2.7× smaller.
+- Divided by the latent change, the two losses are within 7%.
+- In pixel space the predicted frames match the ground truth equally well (PSNR 21.6–21.7 dB, SSIM 0.84). Action errors are equal, and both VAEs reconstruct at about 43 dB.
+- The lower Qwen-Image-2.1 video loss reflects its latent space, not better image or action prediction on these metrics.
