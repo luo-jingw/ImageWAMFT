@@ -17,6 +17,7 @@ rm -f "${LOGDIR}"/*/events.out.tfevents.*
   --logdir "${LOGDIR}" \
   --run "flux2_klein_4b=${PROJECT_ROOT}/checkpoints/g1_lgg100_flux2_klein_4b_base_imagewam" \
   --run "qwenimage21=${PROJECT_ROOT}/checkpoints/g1_lgg100_qwenimage21_imagewam" \
+  --run "flux2_klein_9b=${PROJECT_ROOT}/checkpoints/g1_lgg100_flux2_klein_9b_base_imagewam" \
   --interval 120 > "${LOGDIR}/sync.log" 2>&1 &
 SYNC_PID=$!
 trap 'kill ${SYNC_PID} 2>/dev/null' EXIT

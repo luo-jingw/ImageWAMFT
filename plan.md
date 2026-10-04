@@ -769,3 +769,33 @@ Phases 6, 8, 9, 14, and both runs finished
 ### Observation
 
 One table per run covering configuration, step count, wall-clock time, peak memory, final and best `val_loss` / `action_l2` / `action_l1` / PSNR / SSIM, and checkpoint paths. A parity table covering per-block and final differences for the transformer and the VAE.
+
+## Phase 16
+
+Phase Status: active
+
+Round: 7
+
+### Goal
+
+Train FLUX.2-klein-base-9B ImageWAM on G1 with the recipe, data, text features and normalization statistics of the FLUX.2-4B run.
+
+### Files
+
+`ImageWAM/configs/task/g1_lgg100_flux2_klein_9b_base_imagewam.yaml`, `launch/g1_flux2_9b_train.sh`, `launch/wait_and_launch_flux2_9b.py`, `launch/tensorboard.sh`
+
+### Structures
+
+none
+
+### Affected Modules
+
+M3
+
+### Dependencies
+
+Phase 6 (normalization statistics), ISSUE-008 and ISSUE-009 fixes
+
+### Observation
+
+Same as Phase 6. About 10B trainable parameters need one B300 (`nnmc73`) or four H100 on one node; the effective batch stays 64 through the gradient accumulation set by the launcher. `launch/wait_and_launch_flux2_9b.py` starts the run once such GPUs stay idle for 15 minutes and logs to `checkpoints/g1_lgg100_flux2_klein_9b_base_imagewam/wait_and_launch.log`.

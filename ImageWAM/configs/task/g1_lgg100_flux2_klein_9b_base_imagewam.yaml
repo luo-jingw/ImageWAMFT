@@ -1,5 +1,7 @@
 # @package _global_
 # FLUX.2-klein-base-9B ImageWAM on the LGG100 Unitree G1 data (paper real-world recipe).
+# 1 B300 x 4 per GPU x gradient accumulation 16 = effective batch 64.
+# launch/g1_flux2_9b_train.sh sets the accumulation from the GPU count, keeping the effective batch at 64.
 
 defaults:
   - override /data: g1_lgg100
@@ -29,10 +31,10 @@ learning_rate: 1e-4
 num_epochs: 10
 max_steps: null
 log_every: 10
-save_every: 2500
+save_every: 5000
 eval_every: 500
 
-gradient_accumulation_steps: 2
+gradient_accumulation_steps: 16
 weight_decay: 1e-2
 max_grad_norm: 1.0
 optimizer_max_group_numel: 1000000000  # keep DeepSpeed ZeRO-2 per-rank partitions < 2^31 (ISSUE-008)

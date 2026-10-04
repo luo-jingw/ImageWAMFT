@@ -39,7 +39,8 @@ FLUX.2-klein-base-4B, the backbone the paper reports for its real-world experime
   - Using another node's GPUs: `ssh nnmc<N>`, then work in `/shared/user71/workspace/jingwu/ImageWAMFT`.
   - Allowed nodes for this project: `nnmc61`–`nnmc71`.
   - GPU policy (2026-10-01): idle GPUs on nodes `nnmc71`–`nnmc75` may be used directly, at most 4 GPUs per node. Training uses 2 GPUs per model, and GPUs that other users occupy are not used.
-  - Initial GPU grant (2026-10-01): two GPUs on `nnmc71` (8× H100 NVL, 95,830 MiB) and two GPUs on `nnmc73`. `nnmc73` has 8× B300 SXM6 AC with 275,040 MiB, compute capability 10.3, driver 595.71.05 (CUDA 13.2), no CUDA toolkit in `/usr/local`, Ubuntu 24.04, and uv 0.11.28. Other GPUs on those nodes, and nodes `nnmc72` and `nnmc74`–`nnmc76`, are not used.
+  - GPU policy: idle GPUs on `nnmc71`–`nnmc75` may be used, at most 4 per node; GPUs with another user's process are never used. All nodes run jobs from other people under the same `user1` account, so a process counts as this project's only when its command line contains `ImageWAMFT`.
+  - `nnmc73`–`nnmc75` have 8× B300 SXM6 AC with 275,040 MiB, compute capability 10.3. `nnmc73`: driver 595.71.05 (CUDA 13.2), no CUDA toolkit in `/usr/local`, Ubuntu 24.04, uv 0.11.28. `nnmc74` and `nnmc75` lack the uv CPython 3.11.15 that `.venv-nnmc73` links to, so that environment runs on `nnmc73` only.
   - A node may need its own Python environment, because GPU models, CUDA toolkits and uv-managed interpreters differ between nodes. Each node gets its own uv environment built with the `.venv` recipe below, and rebuilding per node is acceptable.
   - Hardware of the allowed nodes (read-only survey, 2026-10-01). All have `uv` at `/home/user1/.local/bin/uv` and 128 CPUs, except `nnmc71` with 96:
 
