@@ -69,3 +69,147 @@ Action-to-prefix attention, averaged over heads, action tokens, denoising steps 
 - Per-camera masking: agent view only vs. wrist view only.
 - Open-loop evaluation of mask strategies on the saved simulator states of the unmasked episodes, before closed-loop confirmation.
 - Measured speed-up when masked tokens are removed from the sequence, including removal of the 512-slot text padding.
+
+# Strategy Comparison: Removal, Merging and K/V Reuse
+
+Run: `runs/20261004_reduce_grid/` (git-ignored). 11 new conditions × 200 episodes; every one of the 2,200 episodes completed without a worker crash. The no-reduction and random 131/261 conditions are those of the first grid. Design and sanity checks: `PLAN.md` → Strategy Comparison Grid. Figures: `figures/reduce/`.
+
+## Success Rate
+
+Success rate in %. "Lost / gained" counts episodes that fail / succeed only with the reduction, paired with the no-reduction episode of the same task and initial state; p is the exact McNemar test.
+
+| Condition | Tokens reduced | All | Spatial | Object | Goal | Long | Lost / gained | p |
+|---|---|---|---|---|---|---|---|---|
+| none | 0 | 100.0 | 100 | 100 | 100 | 100 | – | – |
+| random removal | 131 (1/3) | 97.5 ± 1.1 | 96 | 100 | 94 | 100 | 5 / 0 | 0.062 |
+| random removal | 196 (1/2) | 95.0 ± 1.5 | 98 | 96 | 94 | 92 | 10 / 0 | 0.002 |
+| random removal | 261 (2/3) | 74.5 ± 3.1 | 88 | 88 | 62 | 60 | 51 / 0 | 9e-16 |
+| grid removal | 131 | 97.5 ± 1.1 | 94 | 100 | 96 | 100 | 5 / 0 | 0.062 |
+| grid removal (checkerboard) | 196 | 98.0 ± 1.0 | 96 | 100 | 100 | 96 | 4 / 0 | 0.12 |
+| grid removal | 261 | 87.0 ± 2.4 | 94 | 96 | 80 | 78 | 26 / 0 | 3e-8 |
+| ToMe merge | 131 | 98.0 ± 1.0 | 96 | 98 | 98 | 100 | 4 / 0 | 0.12 |
+| ToMe merge | 196 | 34.5 ± 3.4 | 66 | 16 | 42 | 14 | 131 / 0 | 7e-40 |
+| ToMe merge | 261 | 16.5 ± 2.6 | 38 | 2 | 26 | 0 | 167 / 0 | 1e-50 |
+| K/V reuse, random | 131 | 19.5 ± 2.8 | 10 | 16 | 40 | 12 | 161 / 0 | 7e-49 |
+| K/V reuse, random | 261 | 0 | 0 | 0 | 0 | 0 | 200 / 0 | 1e-60 |
+| K/V reuse, top-9 refreshed | 383 | 0 | 0 | 0 | 0 | 0 | 200 / 0 | 1e-60 |
+| K/V reuse, 9 random refreshed | 383 | 0 | 0 | 0 | 0 | 0 | 200 / 0 | 1e-60 |
+
+Paired comparisons between strategies (same task and initial state; episodes where only one of the two succeeds; exact McNemar):
+
+| Comparison | Only first succeeds | Only second succeeds | p |
+|---|---|---|---|
+| grid vs. random, 261 | 38 | 13 | 0.0006 |
+| grid vs. random, 196 | 9 | 3 | 0.15 |
+| grid vs. random, 131 | 4 | 4 | 1 |
+| ToMe vs. grid, 196 | 2 | 129 | 6e-36 |
+| ToMe vs. grid, 131 | 4 | 3 | 1 |
+| K/V reuse vs. random removal, 131 | 1 | 157 | 9e-46 |
+
+## Paired Action Deviation
+
+Mean absolute difference between the reduced and the paired unreduced action chunk (normalized units, 16 × 7 values). For K/V reuse, the first call of each episode computes every token and is excluded.
+
+| Condition | Tokens reduced | Mean | Median | 90th percentile |
+|---|---|---|---|---|
+| random removal | 131 / 196 / 261 | 0.039 / 0.058 / 0.096 | 0.032 / 0.048 / 0.075 | 0.062 / 0.092 / 0.172 |
+| grid removal | 131 / 196 / 261 | 0.031 / 0.038 / 0.068 | 0.026 / 0.033 / 0.057 | 0.048 / 0.057 / 0.106 |
+| ToMe merge | 131 / 196 / 261 | 0.048 / 0.132 / 0.148 | 0.040 / 0.106 / 0.123 | 0.078 / 0.259 / 0.281 |
+| K/V reuse, random | 131 / 261 | 0.095 / 0.107 | 0.070 / 0.073 | 0.208 / 0.239 |
+| K/V reuse, top-9 / 9 random refreshed | 383 | 0.192 / 0.210 | 0.182 / 0.203 | 0.266 / 0.281 |
+
+K/V entry age when reused, in calls (12 control steps per call):
+
+| Condition | Mean | Median | 90th percentile | Max |
+|---|---|---|---|---|
+| random, 131 | 1.5 | 1 | 3 | 14 |
+| random, 261 | 2.8 | 2 | 6 | 29 |
+| top-9 refreshed | 20.9 | 19 | 42 | 58 |
+| 9 random refreshed | 15.9 | 13 | 32 | 58 |
+
+- K/V-reuse deviation peaks within the first five calls and then falls (`figures/reduce/r6_kv_reuse.png`). Failed episodes stall, and once the scene stops changing the stale entries match it again.
+- The same dilution explains why the successful K/V-reuse episodes at 131 have a larger mean deviation (0.120) than the failed ones (0.095).
+- `kv_topk` refreshes the robot arm in the agent view and the gripper fingers in the wrist view (refresh-frequency map in `r6_kv_reuse.png`).
+
+## Open-Loop Dose Test: Reused K/V vs. Removed Tokens
+
+Script: `kv_dose.py`; output: `runs/20261004_reduce_grid/kv_dose.json`.
+
+- **States:** saved states of 20 no-reduction episodes (tasks 0–4 of every suite, trial 0) at calls 1, 3 and 6.
+- **Canvas:** the K/V canvas comes from the observation of the previous call.
+- **Arms:** the same nested random token sets are either reused from the canvas or removed.
+- **Measure:** both arms are compared with the full inference on the same restored state, which isolates the mechanism from closed-loop drift.
+
+| Tokens | Deviation, reused | Deviation, removed | Gripper sign flips, reused | Gripper sign flips, removed |
+|---|---|---|---|---|
+| 0 | 0.000 | 0.000 | 0% | 0% |
+| 13 | 0.019 | 0.008 | 0.8% | 0.3% |
+| 33 | 0.042 | 0.012 | 2.5% | 0.1% |
+| 65 | 0.078 | 0.022 | 5.3% | 0.4% |
+| 131 | 0.134 | 0.035 | 8.3% | 1.0% |
+| 196 | 0.184 | 0.053 | 10.8% | 2.2% |
+| 261 | 0.208 | 0.078 | 11.4% | 2.1% |
+| 383 | 0.221 | 0.291 | 11.7% | 36.7% |
+
+Gripper sign flips are the share of the 12 executed steps whose binarized gripper command differs from the full inference.
+
+- With no token reused or removed, both arms equal the full inference exactly.
+- Reused K/V deviates 3–4 times as much as removal at every count up to 261, and the deviation grows monotonically with the count. It flips the gripper command 4–8 times as often.
+- Only with 383 of 392 tokens affected is a stale image better than almost no image.
+- The simulator restore is not bit-exact: the full inference on the restored state differs from the recorded action by a median of 0.018, and by more than 0.1 in 7 of 60 states. Both arms use the same restored state, so the comparison is unaffected.
+
+## Conclusions
+
+- **Fixed regular removal is at least as good as random removal.** It is better at 2/3 (87.0% vs. 74.5%, paired p = 0.0006), mostly in Goal (+18) and Long (+18). A regular pattern leaves every image region represented, while random removal can empty a region such as the gripper area.
+- **ToMe at the input matches removal at 1/3 and fails beyond it** (34.5% at 1/2 against 98.0% for the checkerboard). A merged token is an average of VAE latents at an averaged, fractional position, which the model has never seen. The ToFu variant below rules out the shrunken norm.
+- **Reusing stale keys and values is far worse than removing the same tokens:** 19.5% vs. 97.5% at 1/3, and 0% at 2/3 and with 9 refreshed tokens. The open-loop test confirms it is the mechanism, not drift: stale entries encode the gripper and objects where they were, which contradicts the fresh tokens. The attention-selected top-9 refresh is no better than 9 random tokens, because both are dominated by the 383 stale entries.
+
+# Attention-Guided Pruning, EViT and Token Fusion
+
+Run: `runs/20261005_attn_merge_grid/` (git-ignored). 8 conditions × 200 episodes; every one of the 1,600 episodes completed without a worker crash. Design and the per-call score: `PLAN.md` → Attention-Guided Pruning and Merging Variants.
+
+Sanity checks (`sanity_check.py`):
+- Removed tokens receive zero attention.
+- Every kept token scores at least as high as every removed one.
+- EViT feeds k + 1 image tokens, the last of size n.
+- Each ToFu merged token's norm equals the largest norm in its group (relative difference ≤ 6e-4, bf16).
+
+| Condition | Tokens reduced | All | Spatial | Object | Goal | Long | Lost / gained vs. none | p | Deviation, median (p90) |
+|---|---|---|---|---|---|---|---|---|---|
+| attention top-k removal | 131 | 98.5 ± 0.9 | 96 | 100 | 100 | 98 | 3 / 0 | 0.25 | 0.010 (0.018) |
+| attention top-k removal | 196 | 98.0 ± 1.0 | 96 | 100 | 100 | 96 | 4 / 0 | 0.12 | 0.017 (0.033) |
+| attention top-k removal | 261 | 98.5 ± 0.9 | 96 | 100 | 98 | 100 | 3 / 0 | 0.25 | 0.031 (0.055) |
+| EViT fusion | 131 | 99.0 ± 0.7 | 96 | 100 | 100 | 100 | 2 / 0 | 0.5 | 0.009 (0.017) |
+| EViT fusion | 196 | 98.5 ± 0.9 | 98 | 100 | 100 | 96 | 3 / 0 | 0.25 | 0.017 (0.031) |
+| EViT fusion | 261 | 97.0 ± 1.2 | 96 | 100 | 96 | 96 | 6 / 0 | 0.031 | 0.031 (0.056) |
+| ToFu MLERP merge | 196 | 32.0 ± 3.3 | 60 | 12 | 46 | 10 | 136 / 0 | 2e-41 | 0.103 (0.263) |
+| ToFu MLERP merge | 261 | 18.0 ± 2.7 | 40 | 0 | 32 | 0 | 164 / 0 | 9e-50 | 0.124 (0.274) |
+
+Paired comparisons between strategies (episodes where only one of the two succeeds; exact McNemar):
+
+| Comparison | Only first succeeds | Only second succeeds | p |
+|---|---|---|---|
+| attention top-k vs. random removal, 261 | 51 | 3 | 3e-12 |
+| attention top-k vs. grid removal, 261 | 24 | 1 | 1.5e-6 |
+| attention top-k vs. grid removal, 196 | 4 | 4 | 1 |
+| EViT vs. attention top-k, 261 | 1 | 4 | 0.38 |
+| EViT vs. attention top-k, 196 | 2 | 1 | 1 |
+| ToFu vs. ToMe, 196 | 20 | 25 | 0.55 |
+| ToFu vs. ToMe, 261 | 11 | 8 | 0.65 |
+
+## Conclusions
+
+- **Which tokens are kept matters more than how many.**
+  - Keeping the 131 tokens the action expert attends to most loses no measurable success: 98.5%, against 74.5% for random and 87.0% for grid removal at the same budget.
+  - The paired action deviation at 2/3 removed (median 0.031) is below that of random removal at 1/3 (0.032).
+  - At 1/2 the selection no longer matters: grid and attention both reach 98%.
+- **The selection needs the full input.** The score comes from a full-input prefill and one action denoising step on the current observation. On H100 a 1-step `infer_action` (VAE, prefill, one action step) takes 38.4 ms against 155.8 ms for 10 steps (`research/latency/results.txt`), so scoring costs about a quarter of an inference. The reduced inference after it saves compute only in the remaining steps. Whether a cheaper score works (fewer layers, the previous call's score with periodic refresh) is open.
+- **EViT's fused token adds nothing.** It receives little attention (0.0004 in the sanity state), and success equals top-k removal (paired p ≥ 0.38).
+- **ToMe's failure is not the norm of the averaged tokens.** Norm-preserving MLERP gives the same success as ToMe (paired p = 0.55 and 0.65). The remaining candidates are the blended latent content and the averaged fractional positions; neither was tested separately.
+
+## Open Questions
+
+- Attention top-k with fewer kept tokens (for example 64, 32, 16), to find where it starts to fail.
+- A cheaper score: an early-layer attention, or the previous call's score refreshed by a full pass every few calls.
+- Measured speed-up when the removed tokens are dropped from the sequence instead of masked.
+- ToMe with destination positions kept (no position averaging), to separate content blending from position averaging.

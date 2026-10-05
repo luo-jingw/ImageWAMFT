@@ -68,3 +68,76 @@ Fixed:
 
 - The unmasked level does not reproduce the paper's success rates within the sampling error of 50 episodes per suite. Fix the evaluation pipeline before reading the masked levels.
 - With 5 trials per task the levels are not separable. Report this before adding trials.
+
+## Strategy Comparison Grid (2026-10-04)
+
+**Question.** At the same budget of computed reference-image tokens, does the way tokens are reduced matter?
+- Remove: random vs. a fixed regular pattern.
+- Merge: ToMe.
+- Reuse: take the K/V of tokens that are not recomputed from earlier calls.
+
+**Strategies** (`eval_token_mask.py`; a condition is `strategy:n` with n tokens reduced):
+
+| Strategy | What happens to the n tokens | n |
+|---|---|---|
+| `random` | Removed (attention column disabled); resampled every call | 196 (131 and 261 come from the first grid) |
+| `grid` | Removed; fixed pattern on the 14 × 28 grid | 131: (r+c)%3==0; 196: checkerboard (r+c)%2==0; 261: all but (r+c)%3==0 |
+| `tome` | Merged away by ToMe bipartite soft matching on the VAE latent tokens | 131, 196 (one round); 261 (rounds 196 + 65) |
+| `kv_random` | Not recomputed; reused from the per-episode K/V canvas; resampled every call | 131, 261 |
+| `kv_topk` | Not recomputed; only the 9 tokens with the most action attention at the previous call are recomputed | 383 |
+| `kv_randk` | As `kv_topk`, with 9 random tokens recomputed (control for `kv_topk`) | 383 |
+
+Strategy details:
+- **ToMe:**
+  - Positions are merged by the same size-weighted average.
+  - Proportional attention adds log(size) to the attention logits of merged tokens.
+  - The sequence becomes shorter.
+- **K/V reuse:**
+  - The K/V canvas holds, per prefix layer, each image token's K/V from the latest call that computed it.
+  - Reused tokens' K/V replace the fresh ones before attention in every prefix layer, so the cached prefix the action expert reads carries them too. Text and proprio are always recomputed.
+  - The first call of an episode computes every token.
+
+**Fixed**, as in the first grid:
+- 200 episodes per condition: 4 suites × 10 tasks × 5 initial states;
+- OSMesa rendering, seed 42;
+- a paired unreduced inference at every call.
+
+The no-reduction and random 131/261 episodes are reused from `runs/20261004_osmesa_grid/`. 11 new conditions × 200 = 2,200 episodes, in `runs/20261004_reduce_grid/`.
+
+**Sanity checks** (`sanity_check.py`, LIBERO-Spatial task 0):
+- No reduction equals the official prediction path (max diff 0).
+- Removed tokens receive zero attention.
+- ToMe with zero merges goes through the float-mask path and equals no reduction exactly.
+- Merged sizes sum to 392.
+- K/V reuse is exact on the first call and when the canvas comes from the same observation. Reused canvas entries stay unchanged.
+
+**Analysis** (`compare_reductions.py`):
+- success rate per condition and suite, with the McNemar test against no reduction;
+- paired action deviation (K/V conditions: reuse calls only);
+- K/V entry age and the deviation per call index;
+- where `kv_topk` refreshes;
+- what each strategy does to one frame, and the frame the K/V canvas encodes.
+
+## Attention-Guided Pruning and Merging Variants
+
+**Question.** In the strategy comparison grid, ToMe merging failed beyond 1/3 (39% at 1/2), while a fixed checkerboard removal of 1/2 kept 98%. Two follow-ups:
+- Does selecting the kept tokens by the model's own action attention beat random and grid selection at the same budget?
+- Does ToMe fail because averaging shrinks the merged tokens' norms?
+
+**Strategies** (`eval_token_mask.py`):
+
+| Strategy | Classic method | What happens to the n tokens | n |
+|---|---|---|---|
+| `attn_topk` | top-k pruning (FastV-style selection) | the n lowest-scored tokens are removed, as in `random` | 131, 196, 261 |
+| `evit` | EViT token reorganization (Liang et al., ICLR 2022) | the n lowest-scored tokens are fused into one token: the score-weighted average of their VAE latents and positions, appended after the kept tokens, without proportional attention | 131, 196, 261 |
+| `tofu` | Token Fusion MLERP (Kim et al., WACV 2024) | ToMe matching and proportional attention; each merged token is rescaled to the largest norm among the tokens it merges | 196, 261 |
+
+**Score.** The score is computed per call, on the current observation, by a full-input pass: the prefix prefill plus the first action denoising step (with the same noise, this step equals step 1 of the 10-step schedule). It is the action-to-image attention averaged over layers, heads and action queries.
+
+The previous call's attention cannot serve as the score: removed tokens receive zero attention, so the kept set would freeze after the first call.
+
+The removal scope equals that of `random` and `grid` (prefix prefill and all action steps), so the three selections compare at equal budget.
+
+**Fixed:** as in the strategy comparison grid. 8 conditions × 200 = 1,600 episodes.
+
+**Recorded:** additionally, the per-call score (float16 [392]).
