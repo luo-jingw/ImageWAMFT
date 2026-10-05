@@ -81,3 +81,13 @@ One H100 NVL, batch 1, 10 denoising steps with the prefix K/V cache, from `docs/
 - All three runs completed the full recipe (27,950 steps at effective batch 64) with finite losses and no restart.
 - On the held-out episodes, the backbone does not change the offline action error: 0.0206–0.0209 rad for the arm joints. The training-time validation metrics agree within their noise.
 - Offline action error does not measure closed-loop success. The physical-robot evaluation remains open.
+
+## Published Weights
+
+`https://huggingface.co/JingwuLuo/ImageWAM3backbones` (public; model card `README.md`, license index `LICENSE.md`). Per run directory, the layout follows `checkpoints/<run>/`:
+- `checkpoints/weights/step_*.pt`: all six saved steps;
+- `config.yaml` and `dataset_stats.json`;
+- `text_cache/`: the four training task strings;
+- the license of the base model: Apache-2.0 for FLUX.2-4B; FLUX Non-Commercial License v2.1 with `NOTICE` for FLUX.2-9B; Qwen Research License with `NOTICE` for Qwen-Image-2.1.
+
+Training logs, videos, wandb files and optimizer states are not published. Verified on 2026-10-05: 43 files, 383 GB, with every file size equal to the local file.
