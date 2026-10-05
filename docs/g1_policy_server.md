@@ -14,12 +14,19 @@ Server, on a node with an idle GPU (at most 4 project GPUs per node):
 
 ```bash
 tmux new-session -d -s imagewamft_g1_server \
-  "GPU=4 MODEL=flux2_4b bash /home/user1/workspace/jingwu/ImageWAMFT/launch/g1_server.sh"
+  "GPU=0 MODELS=flux2_4b,qwenimage21,flux2_9b bash /home/user1/workspace/jingwu/ImageWAMFT/launch/g1_server.sh"
 ```
 
-- Environment variables: `GPU` (required), `MODEL` (`flux2_4b`, `qwenimage21` or `flux2_9b`), `STEP` (default: the latest saved weights), `WS_PORT` (default 8000) and `UI_PORT` (default 7860).
+- Environment variables:
+  - `GPU` (required);
+  - `MODELS`: models loaded at start at their latest step, the first one active; default `flux2_4b`;
+  - `WS_PORT` (default 8000) and `UI_PORT` (default 7860);
+  - `SHARE=1` adds a Gradio share link;
+  - `AUTH_FILE`: a file holding `user:password` that protects the page.
+- All three models stay resident in 42.9 GiB; loading takes 13.5 s (4B), 17.5 s (Qwen-Image-2.1) and 32.5 s (9B).
 - Logs: `deploy/g1_server/logs/server_<time>.log`.
-- Web page: `http://<node>:7860`. It is local network only; no Gradio share link is created.
+- Web page: `http://<node>:7860` on the local network.
+- On `nnmc71` (2026-10-05), the Gradio share link did not come up. The tunnel request and the frpc download succeeded, but no public URL appeared within 10 minutes.
 
 Robot side, from the `tmp/g1-client` repository root:
 

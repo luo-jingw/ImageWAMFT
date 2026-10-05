@@ -33,3 +33,4 @@ research/third_party/
 deploy/g1_server/cache/
 deploy/g1_server/logs/
 .osmesa-libero/
+deploy/g1_server/ui_auth.txt
