@@ -26,3 +26,6 @@ checkpoints/
 
 # TensorBoard mirror of the offline wandb runs (launch/tensorboard.sh)
 tensorboard/
+
+# Research run outputs (rollouts, per-call arrays, videos)
+research/*/runs/
