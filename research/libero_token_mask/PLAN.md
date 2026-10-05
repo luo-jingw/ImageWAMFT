@@ -111,7 +111,7 @@ The no-reduction and random 131/261 episodes are reused from `runs/20261004_osme
 - Merged sizes sum to 392.
 - K/V reuse is exact on the first call and when the canvas comes from the same observation. Reused canvas entries stay unchanged.
 
-**Analysis** (`compare_reductions.py`):
+**Analysis** (`make_figures.py`, which rebuilds `figures/` from all runs):
 - success rate per condition and suite, with the McNemar test against no reduction;
 - paired action deviation (K/V conditions: reuse calls only);
 - K/V entry age and the deviation per call index;
@@ -141,3 +141,9 @@ The removal scope equals that of `random` and `grid` (prefix prefill and all act
 **Fixed:** as in the strategy comparison grid. 8 conditions × 200 = 1,600 episodes.
 
 **Recorded:** additionally, the per-call score (float16 [392]).
+
+## K/V Reuse at Proportional Budgets
+
+`kv_topk` at 131, 196 and 261 reused tokens: the tokens with the most action attention at the previous call are recomputed, and the rest reuse their K/V. `kv_random` at 196 completes the random control at 1/3, 1/2 and 2/3. Settings as in the strategy comparison grid; 4 conditions × 200 = 800 episodes, in `runs/20261005_kv_topk_ratio/`.
+
+The 9-token conditions are kept unchanged.
