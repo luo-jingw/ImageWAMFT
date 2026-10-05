@@ -57,7 +57,10 @@ Fixed:
 ## Environment
 
 - `.venv-libero`: the `.venv` package set, plus mujoco 3.3.2, robosuite 1.4.0, bddl 1.0.1, gym 0.25.2 and LIBERO, editable from `ImageWAM/third_party/LIBERO`.
-- Rendering: `MUJOCO_GL=egl`, using the driver EGL.
+- Rendering: OSMesa, the backend of the official evaluation. It uses Mesa 24.3 from the project prefix `.osmesa-libero`; Mesa 25.1 and later no longer ship OSMesa. Rendering runs on the CPU with llvmpipe at about 0.2 s per step.
+  - EGL renders the same state with 60–67% of the pixels different, by 1.1–1.3 of 255 on average and up to 115 at edges (`render_probe.py`).
+  - On the unmasked Spatial suite, EGL rendering gave 34/39 successes and OSMesa 50/50.
+  - EGL also aborted intermittently inside robosuite `read_pixels`. The EGL episodes in `runs/20261004_random_mask_v2/` are kept as a rendering-shift condition and are not part of the grid.
 - LIBERO configuration: project-local, through `LIBERO_CONFIG_PATH`.
 - GPUs: idle H100 on `nnmc71`.
 
