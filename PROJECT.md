@@ -90,6 +90,7 @@ FLUX.2-klein-base-4B, the backbone the paper reports for its real-world experime
     3. `uv pip install --python .venv/bin/python transformers==4.56.1` (the FLUX.2 requirement).
     4. `uv pip install --python .venv/bin/python torchcodec==0.5 --index-url https://pypi.org/simple --reinstall-package torchcodec`
     5. `uv pip install --python .venv/bin/python opencv-python-headless==4.11.0.86 --reinstall-package opencv-python-headless --no-cache --link-mode copy`
+    6. Serving dependencies for the G1 policy server: `uv pip install --python .venv/bin/python --link-mode copy -c <constraints> gradio==6.17.3 websockets==17.2`. `<constraints>` is the `.venv` freeze before this step, without the editable `imagewam` line. This adds 23 packages and changes none. gradio 4 and 5 require pillow < 12 and conflict with pillow 12.0.
   - Resulting key versions: torch 2.7.1+cu118, torchvision 0.22.1+cu118, torchcodec 0.5 (CPU build), transformers 4.56.1, huggingface-hub 0.36.2, diffusers 0.34.0, deepspeed 0.18.5, accelerate 1.12.0, numpy 1.26.4.
   - `uv pip check` reports two known conflicts: `imagewam` pins `transformers==4.51.3` and `huggingface-hub==0.30.0`. Both come from the FLUX.2 transformers upgrade.
   - The cu118 build of torchcodec needs `libnppicc.so.11`, which is absent, so the CPU build is installed. ImageWAM decodes video on CPU only. Re-running step 2 can bring back the cu118 build.

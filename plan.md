@@ -41,8 +41,13 @@ Neither target model can be trained on LGG100 with the paper's real-world recipe
    - the measured step time and peak GPU memory.
 4. The Qwen-Image-2.1 transformer and VAE implementations used in training reproduce the diffusers reference outputs on shared inputs. The per-layer and final maximum absolute differences are reported.
 5. Each full run is launched in its own `tmux` session on its training node once that model's smoke test passes; launch is authorized. Logging is local only: offline wandb under the run directory plus the launcher log.
+6. A G1 policy server for physical-robot tests of the three trained models (FLUX.2-klein-base-4B, Qwen-Image-2.1, FLUX.2-klein-base-9B):
+   - It speaks the WebSocket/msgpack protocol of the FastWAM client in `tmp/g1-client/fastwam/` unchanged.
+   - It returns de-normalized 16-dim joint-space action chunks.
+   - It preprocesses observations exactly as training did.
+   - A local web page (Gradio) switches the model and checkpoint and edits the inference settings.
 
-Out of scope: physical-robot deployment and evaluation (no G1 policy adapter exists; `experiments/robotwin/imagewam_policy/deploy_policy.py` is the later template), and the FLUX.2-klein-base-4B run.
+Out of scope: running the physical-robot evaluation itself.
 
 Constraint check against this goal:
 - Raw-data read-only (`PROJECT.md`): satisfied, because exclusion is a loader filter and data files stay unchanged.
@@ -70,6 +75,15 @@ Constraint check against this goal:
 | M13 | Qwen-Image G1 run spec | Model config, task config and launcher for Qwen-Image-2.1 on G1 |
 | M14 | Parity checks | Reference fixture dump (in M6) and comparison against M7 and M8 (in `.venv`) |
 | M15 | Results record | Measured training and validation results of both runs in `docs/` |
+| M16 | Serving dependencies | `websockets` and `gradio` added to `.venv`, with every existing `.venv` package pinned |
+| M17 | Wire protocol | msgpack + NumPy codec mirroring `tmp/g1-client/g1_client/msgpack_numpy.py`; typed request, response and metadata messages of the FastWAM client protocol |
+| M18 | Observation preprocessing | Three RGB views and the raw 16-dim state → the 288×256 model image in [-1, 1] and the normalized proprio, with the training transforms |
+| M19 | Prompt features | Text features per model and prompt: training caches first, then online encoding |
+| M20 | G1 policy | One loaded model and checkpoint: build from the run's `config.yaml`, load weights, infer de-normalized action chunks and optionally a predicted image |
+| M21 | Policy manager | Resident policies, the active policy, inference settings and the request log; serializes inference and loading |
+| M22 | WebSocket server | FastWAM-compatible endpoint over M17, M18 and M21 |
+| M23 | Web UI | Gradio page: model and checkpoint selection, settings, last observation, action chunk and latency |
+| M24 | Server entry, launcher and record | Process entry point, tmux launcher, offline replay check through the unmodified client, `docs/g1_policy_server.md` |
 
 ## Decisions
 
@@ -104,6 +118,37 @@ Constraint check against this goal:
 - **D11 Compute.** Each model trains on 2 idle GPUs from nodes `nnmc71`–`nnmc75` (at most 4 per node). If a model does not fit at 4 samples per GPU, the micro-batch drops to 2 and gradient accumulation rises to 16, so the effective batch stays 64.
 - **D12 DeepSpeed configuration** changes only as concluded by ISSUE-008, applied identically to both runs.
 - **D9 Code placement.** New Qwen-Image-2.1 logic lives in dedicated files (M7–M10, M12). The shared ImageWAM files (`imagewam.py`, `mot.py`, `runtime.py`, `trainer.py`, `robot_video_dataset.py`) receive only dispatch hooks.
+- **D13 Server protocol: the FastWAM client protocol, unchanged.**
+  - On connect the server sends metadata: model, checkpoint, camera order, state and action dimensions, action horizon.
+  - Request: `{"image": [cam_left_high, cam_left_wrist, cam_right_wrist] RGB uint8 HWC, "state": float32[16], "prompt": str}`. A request with `"reset": true` is acknowledged with an empty map.
+  - Response: `{"actions": float32[H, 16], "server_timing": {...}}`. Actions are de-normalized absolute targets: 14 arm joints (rad), then the left and right gripper.
+  - `tmp/g1-client/fastwam/{main,main_sync,main_eef,main_mask}.py` connect without changes. The EEF loops need an EEF-trained checkpoint, which does not exist; the joint-space loops apply.
+- **D14 Observation preprocessing equals training.** Each view becomes a float tensor and goes through:
+  1. the processor's validation transform, `Resize(240, 320)`;
+  2. the RoboTwin compact tiling: bilinear antialiased resize of `cam_left_high` to 192×256 and of each wrist view to 96×128;
+  3. stacking (head on top, left and right wrist below) and scaling to [-1, 1].
+
+  The state is z-scored with the run's `dataset_stats.json`. Any input resolution is accepted. The client sends 256×320, resized by the robot from 480×640; full-frame resizes compose, so no crop differs from training.
+- **D15 Prompt features.**
+  - A prompt is wrapped in `DEFAULT_PROMPT` and looked up by SHA-256 in the run's training text cache. The four training task strings resolve there, bit-identical to training.
+  - Other prompts:
+    - FLUX.2: the model's own Qwen3 text encoder (`load_text_encoder: true`).
+    - Qwen-Image-2.1: `precompute_qwenimage21_text_embeds.py`, run in `.venv-qwenimage` as a subprocess, writing to a server-owned cache. That transformers 5 stack cannot live in the serving process.
+  - The prompt in use is the client's prompt or a fixed prompt chosen on the web page.
+- **D16 Model residency.**
+  - Models load on demand into one GPU and stay resident until unloaded. Model weights take about 10 GB (4B), 20 GB (Qwen-Image-2.1) and 34 GB (9B with Qwen3-8B).
+  - Exactly one policy is active and serves requests.
+  - Loading and inference are serialized: a request that arrives during a load waits, and the robot holds its last commanded pose at the chunk boundary.
+- **D17 Inference settings** (web page, applied to the next request):
+  - denoising steps: default 10, as in training validation;
+  - sigma shift: default from the run config;
+  - seed: fixed 42 or a new seed per request;
+  - action horizon: default 16, the trained value;
+  - prompt source.
+- **D18 Network.** WebSocket on `0.0.0.0:8000` (the client default) and the web page on `0.0.0.0:7860`, without a Gradio share link. The GPU is one idle GPU under the D11 node policy, chosen at launch.
+- **D19 Serving dependencies in `.venv`.**
+  - `websockets` and `gradio` 6 are installed into `.venv` under a constraint file holding the previous `.venv` freeze, so no existing package changes version.
+  - gradio 4 and 5 require pillow < 12 and conflict with the pinned pillow 12.0.
 
 ## Responsibilities
 
@@ -124,6 +169,8 @@ Constraint check against this goal:
 | Qwen-Image action-DiT initialization | `ImageWAM/scripts/qwenimage21/preprocess_action_dit_qwenimage21.py` → `ImageWAM/checkpoints/action_dit_qwenimage21_g1_init.pt` | `ActionDiTQwenImage21.from_pretrained` |
 | Reference fixtures | `ImageWAM/scripts/qwenimage21/dump_reference_fixtures.py` (in `.venv-qwenimage`) → `ImageWAM/data/qwenimage21_fixtures/` | M14 comparison scripts |
 | Trained weights and training state | `Trainer` → `checkpoints/<run_name>/checkpoints/{weights,state}/` (project root, git-ignored) | later deployment |
+| Resident policies, active policy, inference settings, request log | `PolicyManager` (M21) | M22 (inference), M23 (display and edits through `PolicyManager` methods) |
+| Server prompt-feature cache | `PromptFeatureStore` (M19) → `deploy/g1_server/cache/` (git-ignored) | M19 |
 | Local paths (FLUX.2 source, weights, data root) | `ImageWAM/.env.local`, git-ignored, contents documented in `PROJECT.md` | `ImageWAM/scripts/common.sh` |
 
 # Interface
@@ -185,6 +232,34 @@ Constraint check against this goal:
 - **M14**
   - `dump_reference_fixtures.py --out <dir>` (in `.venv-qwenimage`) writes the fixed-seed inputs and the reference outputs of the diffusers transformer and VAE: per-block hidden states, final output, VAE latents and reconstruction.
   - `check_parity_dit.py --fixtures <dir>` and `check_parity_vae.py --fixtures <dir>` (in `.venv`) print the per-layer and final maximum absolute and relative differences.
+- **M17** `deploy/g1_server/msgpack_numpy.py`: `packb`, `unpackb`, `Packer` (same encoding as the client module). `deploy/g1_server/protocol.py`:
+  - `ObservationRequest.from_message(message: dict) -> ObservationRequest | ResetRequest` validates the three views (uint8 HWC RGB), the state (16) and the prompt;
+  - `ActionResponse(actions: np.ndarray, server_timing: ServerTiming).to_message() -> dict`;
+  - `ServerMetadata.to_message() -> dict`.
+- **M18** `deploy/g1_server/observation_preprocessor.py`: `G1ObservationPreprocessor(processor: ImageWAMProcessor, device: torch.device, dtype: torch.dtype)`:
+  - `image(views: list[np.ndarray]) -> Tensor[1, 3, 288, 256]` in [-1, 1];
+  - `proprio(state: np.ndarray) -> Tensor[16]`, normalized;
+  - `denormalize_actions(actions: Tensor[H, 16]) -> np.ndarray[H, 16]`.
+- **M19** `deploy/g1_server/prompt_features.py`: `PromptFeatureStore(model_spec: ModelSpec, model: ImageWAM)`:
+  - `features(task: str) -> PromptFeatures(context: Tensor[128, D], mask: Tensor[128], source: str)`;
+  - `source` is `training_cache`, `server_cache` or `online`.
+- **M20** `deploy/g1_server/model_registry.py`: `ModelSpec(name, run_dir, stack, text_cache_dir, text_cache_format)`; `MODEL_SPECS: tuple[ModelSpec, ...]` (three runs); `available_steps(spec: ModelSpec) -> list[int]`. `deploy/g1_server/g1_policy.py`: `G1Policy.load(spec: ModelSpec, step: int, device: torch.device) -> G1Policy`:
+  - `infer(request: ObservationRequest, settings: InferenceSettings) -> PolicyOutput(actions: np.ndarray[H, 16], model_image: np.ndarray, timing: ServerTiming)`;
+  - `predict_image(request: ObservationRequest, settings: InferenceSettings) -> np.ndarray` (predicted frame 16 steps ahead, web page only);
+  - `unload() -> None`.
+- **M21** `deploy/g1_server/policy_manager.py`: `PolicyManager(device: torch.device)` with:
+  - `load(name: str, step: int) -> LoadReport`, `activate(name: str) -> None`, `unload(name: str) -> None`;
+  - `settings() -> InferenceSettings`, `update_settings(settings: InferenceSettings) -> None`;
+  - `infer(request: ObservationRequest) -> PolicyOutput`;
+  - `metadata() -> ServerMetadata`, `status() -> ManagerStatus`, `recent(n: int) -> list[RequestRecord]`.
+
+  `deploy/g1_server/inference_settings.py`: `InferenceSettings` dataclass (D17).
+- **M22** `deploy/g1_server/websocket_server.py`: `PolicyWebSocketServer(manager: PolicyManager, host: str, port: int)`, `.serve_forever() -> None`, run on its own thread.
+- **M23** `deploy/g1_server/web_ui.py`: `build_web_ui(manager: PolicyManager) -> gradio.Blocks`.
+- **M24**
+  - `deploy/g1_server/main.py --gpu --ws-port --ui-port --model --step`;
+  - `launch/g1_server.sh` (tmux `imagewamft_g1_server`);
+  - `deploy/g1_server/replay_check.py --server-host --server-port --episodes`: replays held-out LGG100 episodes through `tmp/g1-client/fastwam/fastwam_policy.py`, with the robot's 256×320 JPEG camera path.
 
 ## Inputs
 
@@ -242,6 +317,27 @@ Qwen-Image-2.1:
    - the `Trainer` step, identical to the FLUX.2 run.
 6. Validation: `QwenImage21Stack.infer_action` prefills the prefix KV cache once at t = 0 and then runs action denoising steps only. `infer_image` produces the image metrics.
 
+G1 policy server:
+1. `launch/g1_server.sh` → tmux `imagewamft_g1_server` → `.venv/bin/python deploy/g1_server/main.py`.
+2. `main.py`:
+   - creates `PolicyManager` on the chosen GPU and loads the initial model;
+   - starts `PolicyWebSocketServer` on a thread;
+   - launches `build_web_ui(manager)` on the main thread.
+3. Robot side: `python fastwam/main.py --server-host <host> --server-port 8000 --prompt <task>`.
+   - `PolicyClient` connects and receives `ServerMetadata`.
+   - Each chunk request carries three RGB views and the 16-dim state.
+4. Per request:
+   - `ObservationRequest.from_message`;
+   - `PolicyManager.infer`, which holds the lock and uses the active `G1Policy` and the current `InferenceSettings`. `G1Policy.infer` runs:
+     - `G1ObservationPreprocessor.image` and `.proprio`;
+     - `PromptFeatureStore.features`;
+     - `ImageWAM.infer_action(context, context_mask, input_image, proprio, action_horizon, num_inference_steps, sigma_shift, seed)`;
+     - `denormalize_actions`;
+   - `ActionResponse`.
+
+   The request record (views, model image, actions, timing) is appended to the manager's log.
+5. Web page: model and checkpoint selection calls `PolicyManager.load` / `activate`, and settings edits call `update_settings`. Panels show the last request record. A preview button calls `G1Policy.predict_image` on the last observation.
+
 # Code Mapping
 
 ## Modules
@@ -265,6 +361,16 @@ All paths are relative to the project root.
 | M13 | `ImageWAM/configs/model/imagewam_qwenimage21.yaml` (new), `ImageWAM/configs/task/g1_lgg100_qwenimage21_imagewam.yaml` (new), `ImageWAM/scripts/qwenimage21/run_train_qwenimage21_imagewam.sh` (new) |
 | M14 | `ImageWAM/scripts/qwenimage21/dump_reference_fixtures.py` (new), `ImageWAM/scripts/qwenimage21/check_parity_dit.py` (new), `ImageWAM/scripts/qwenimage21/check_parity_vae.py` (new) |
 | M15 | `docs/g1_training_results.md` (new), `docs/qwenimage21_parity.md` (new) |
+| M16 | `PROJECT.md` (`.venv` build recipe) |
+| M17 | `deploy/g1_server/msgpack_numpy.py` (new), `deploy/g1_server/protocol.py` (new) |
+| M18 | `deploy/g1_server/observation_preprocessor.py` (new) |
+| M19 | `deploy/g1_server/prompt_features.py` (new) |
+| M20 | `deploy/g1_server/model_registry.py` (new), `deploy/g1_server/g1_policy.py` (new) |
+| M21 | `deploy/g1_server/policy_manager.py` (new), `deploy/g1_server/inference_settings.py` (new) |
+| M18–M20 checks | `deploy/g1_server/heldout_samples.py` (new), `deploy/g1_server/policy_core_check.py` (new) |
+| M22 | `deploy/g1_server/websocket_server.py` (new) |
+| M23 | `deploy/g1_server/web_ui.py` (new) |
+| M24 | `deploy/g1_server/main.py` (new), `deploy/g1_server/replay_check.py` (new), `launch/g1_server.sh` (new), `docs/g1_policy_server.md` (new) |
 
 ## Interfaces
 
@@ -279,6 +385,15 @@ All paths are relative to the project root.
 | MoT `qwenimage21` protocol hooks | `ImageWAM/src/imagewam/models/backbones/mot.py` |
 | `create_imagewam_qwenimage21` | `ImageWAM/src/imagewam/runtime.py` |
 | `qwen3vl_qwenimage21` cache format | `ImageWAM/src/imagewam/datasets/lerobot/robot_video_dataset.py` |
+| `ObservationRequest`, `ResetRequest`, `ActionResponse`, `ServerMetadata`, `ServerTiming` | `deploy/g1_server/protocol.py` |
+| `G1ObservationPreprocessor` | `deploy/g1_server/observation_preprocessor.py` |
+| `PromptFeatureStore`, `PromptFeatures` | `deploy/g1_server/prompt_features.py` |
+| `ModelSpec`, `MODEL_SPECS`, `available_steps` | `deploy/g1_server/model_registry.py` |
+| `G1Policy`, `PolicyOutput` | `deploy/g1_server/g1_policy.py` |
+| `PolicyManager`, `LoadReport`, `ManagerStatus`, `RequestRecord` | `deploy/g1_server/policy_manager.py` |
+| `InferenceSettings` | `deploy/g1_server/inference_settings.py` |
+| `PolicyWebSocketServer` | `deploy/g1_server/websocket_server.py` |
+| `build_web_ui` | `deploy/g1_server/web_ui.py` |
 
 ## State
 
@@ -290,6 +405,8 @@ All paths are relative to the project root.
 | Action-DiT initializations | `ImageWAM/scripts/flux2/preprocess_action_dit_flux2.py`, `ImageWAM/scripts/qwenimage21/preprocess_action_dit_qwenimage21.py` |
 | Reference fixtures | `ImageWAM/scripts/qwenimage21/dump_reference_fixtures.py` |
 | Run outputs | `ImageWAM/src/imagewam/trainer.py` |
+| Resident policies, active policy, settings, request log | `deploy/g1_server/policy_manager.py` |
+| Server prompt-feature cache | `deploy/g1_server/prompt_features.py` |
 
 # Implementation
 
@@ -799,3 +916,172 @@ Phase 6 (normalization statistics), ISSUE-008 and ISSUE-009 fixes
 ### Observation
 
 Same as Phase 6. About 10B trainable parameters need one B300 (`nnmc73`) or four H100 on one node; the effective batch stays 64 through the gradient accumulation set by the launcher. `launch/wait_and_launch_flux2_9b.py` starts the run once such GPUs stay idle for 15 minutes and logs to `checkpoints/g1_lgg100_flux2_klein_9b_base_imagewam/wait_and_launch.log`.
+
+## Phase 17
+
+Phase Status: completed
+
+Round: 7
+
+### Goal
+
+Serving dependencies in `.venv` (M16, D19).
+
+### Files
+
+`PROJECT.md`
+
+### Structures
+
+none
+
+### Affected Modules
+
+M16
+
+### Dependencies
+
+none
+
+### Observation
+
+- `torch`, `imagewam`, `websockets`, `gradio` and `msgpack` import, with versions printed.
+- The `.venv` freeze after installation minus the freeze before lists only added packages.
+
+## Phase 18
+
+Phase Status: completed
+
+Round: 8
+
+### Goal
+
+Policy core: protocol messages, observation preprocessing, prompt features, model registry and `G1Policy` (M17–M20).
+
+### Files
+
+`deploy/g1_server/{msgpack_numpy,protocol,observation_preprocessor,prompt_features,model_registry,inference_settings,g1_policy,heldout_samples,policy_core_check}.py`, `deploy/g1_server/__init__.py`, `.gitignore`
+
+### Structures
+
+`ObservationRequest`, `ResetRequest`, `ActionResponse`, `ServerMetadata`, `ServerTiming`, `PromptFeatures`, `ModelSpec`, `InferenceSettings`, `ModelInputs`, `PolicyOutput`
+
+### Affected Modules
+
+M17, M18, M19, M20
+
+### Dependencies
+
+Phase 17; trained weights of Phases 6 and 14, and the latest Phase 16 weights
+
+### Observation
+
+On held-out validation samples, for each model:
+- maximum absolute difference between the server image tensor, built from the raw 480×640 frames, and the dataset's `video[:, 0]`;
+- action difference between `G1Policy.infer` and inference on the dataset sample with identical inputs;
+- FLUX.2 online text features vs. the training cache, maximum absolute difference on the four task strings;
+- load time, GPU memory and per-request latency.
+
+## Phase 19
+
+Phase Status: completed
+
+Round: 9
+
+### Goal
+
+Policy manager, WebSocket server and entry point (M21, M22, part of M24).
+
+### Files
+
+`deploy/g1_server/{policy_manager,websocket_server,main,replay_check}.py`
+
+### Structures
+
+`LoadReport`, `ManagerStatus`, `RequestRecord`, `ResidentPolicy`
+
+### Affected Modules
+
+M21, M22, M24
+
+### Dependencies
+
+Phase 18
+
+### Observation
+
+The unmodified `FastWAMPolicy` from `tmp/g1-client/fastwam/fastwam_policy.py` connects and receives metadata. `replay_check.py` replays the four held-out episodes through the robot's 256×320 JPEG camera path, per model:
+- action L1 (rad) against the recorded actions;
+- response shape and dtype;
+- the client-side latency breakdown.
+
+## Phase 20
+
+Phase Status: completed
+
+Round: 10
+
+### Goal
+
+Gradio web page (M23).
+
+### Files
+
+`deploy/g1_server/web_ui.py`, `deploy/g1_server/main.py`
+
+### Structures
+
+none
+
+### Affected Modules
+
+M23
+
+### Dependencies
+
+Phase 19
+
+### Observation
+
+Driven through the Gradio client API while `replay_check.py` sends requests:
+- loading, activating and unloading each model;
+- a changed setting (steps, seed, horizon, prompt source) appearing in the next response's `server_timing` and action shape;
+- the last-request panels updating;
+- load time and GPU memory per resident model.
+
+## Phase 21
+
+Phase Status: active
+
+Round: 11
+
+### Goal
+
+Launcher and record (M24).
+
+### Files
+
+`launch/g1_server.sh`, `docs/g1_policy_server.md`
+
+### Structures
+
+none
+
+### Affected Modules
+
+M24
+
+### Dependencies
+
+Phase 20; Phase 16 for the final 9B checkpoint row
+
+### Observation
+
+- The server starts in tmux `imagewamft_g1_server`, and `replay_check.py` passes against it.
+- `docs/g1_policy_server.md` records:
+  - the protocol;
+  - preprocessing;
+  - prompt handling;
+  - settings;
+  - the robot-side command;
+  - per-model replay results and latency, including the final 9B checkpoint.

@@ -29,3 +29,7 @@ tensorboard/
 
 # Research run outputs (rollouts, per-call arrays, videos)
 research/*/runs/
+research/third_party/
+deploy/g1_server/cache/
+deploy/g1_server/logs/
+.osmesa-libero/
