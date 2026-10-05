@@ -1,0 +1,8 @@
+stack=qwenimage21 gpu=NVIDIA H100 NVL
+prefix tokens: text 59 valid + 69 padded + 1 proprio, image 288
+infer_action 1 step 55.2 ms | 10 steps 203.5 ms | per action step 16.5 ms | VAE encode 5.8 ms | prefill (+ overhead) 32.9 ms
+peak memory 15.8 GiB
+stack=flux2 gpu=NVIDIA H100 NVL
+prefix tokens: text 63 valid + 65 padded + 1 proprio, image 288
+infer_action 1 step 38.4 ms | 10 steps 155.8 ms | per action step 13.0 ms | VAE encode 4.2 ms | prefill (+ overhead) 21.3 ms
+peak memory 9.2 GiB
