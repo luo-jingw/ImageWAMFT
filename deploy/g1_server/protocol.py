@@ -2,8 +2,9 @@
 
 On connect the server sends `ServerMetadata`. Each request is a msgpack map:
   {"image": [cam_left_high, cam_left_wrist, cam_right_wrist] RGB uint8 HWC, "state": float32[16], "prompt": str}
-or {"reset": True, "prompt": str}. The response to an observation is `ActionResponse`; a reset is answered with an
-empty map. Wire maps are converted to these dataclasses at the server boundary.
+or {"reset": True, "prompt": str}, or a camera preview {"preview": True, "image": [three views]} that is only shown on
+the web page (no inference). The response to an observation is `ActionResponse`; a reset and a preview are answered
+with an empty map. Wire maps are converted to these dataclasses at the server boundary.
 """
 
 from dataclasses import dataclass
@@ -29,14 +30,12 @@ class ResetRequest:
     prompt: str
 
 
-def parse_request(message: object) -> ObservationRequest | ResetRequest:
-    if not isinstance(message, dict):
-        raise ValueError(f"request must be a map, got {type(message).__name__}")
-    prompt = message.get("prompt", "")
-    if not isinstance(prompt, str):
-        raise ValueError(f"`prompt` must be a string, got {type(prompt).__name__}")
-    if message.get("reset", False):
-        return ResetRequest(prompt=prompt)
+@dataclass(frozen=True)
+class PreviewRequest:
+    views: tuple[np.ndarray, ...]  # RGB uint8 [H, W, 3] in CAMERA_KEYS order
+
+
+def parse_views(message: dict) -> tuple[np.ndarray, ...]:
     images = message.get("image")
     if not isinstance(images, (list, tuple)) or len(images) != len(CAMERA_KEYS):
         raise ValueError(f"`image` must be a list of {len(CAMERA_KEYS)} views in order {CAMERA_KEYS}")
@@ -46,10 +45,24 @@ def parse_request(message: object) -> ObservationRequest | ResetRequest:
             shape = getattr(view, "shape", None)
             raise ValueError(f"view {key} must be uint8 [H, W, 3] RGB, got {type(view).__name__} {shape}")
         views.append(view)
+    return tuple(views)
+
+
+def parse_request(message: object) -> ObservationRequest | ResetRequest | PreviewRequest:
+    if not isinstance(message, dict):
+        raise ValueError(f"request must be a map, got {type(message).__name__}")
+    prompt = message.get("prompt", "")
+    if not isinstance(prompt, str):
+        raise ValueError(f"`prompt` must be a string, got {type(prompt).__name__}")
+    if message.get("reset", False):
+        return ResetRequest(prompt=prompt)
+    if message.get("preview", False):
+        return PreviewRequest(views=parse_views(message))
+    views = parse_views(message)
     state = np.asarray(message.get("state"), dtype=np.float32).reshape(-1)
     if state.shape != (STATE_DIM,) or not np.isfinite(state).all():
         raise ValueError(f"`state` must be {STATE_DIM} finite values, got shape {state.shape}")
-    return ObservationRequest(views=tuple(views), state=state, prompt=prompt)
+    return ObservationRequest(views=views, state=state, prompt=prompt)
 
 
 @dataclass(frozen=True)

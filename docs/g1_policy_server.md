@@ -34,6 +34,10 @@ Robot side, from the `tmp/g1-client` repository root:
 python fastwam/main.py --iface <robot interface> --server-host <node> --server-port 8000 --prompt "<task string>"
 ```
 
+- Camera preview without moving the robot: `python fastwam/preview_cameras.py --server-host <node> --server-port 8000 --fps 5`.
+  - The script lives in `tmp/g1-client/fastwam/preview_cameras.py`.
+  - It reads only the cameras, through the image server: no DDS and no arm authority.
+  - The page shows each frame and the model input. Use it to match the scene and the head-camera view to the training data.
 - `fastwam/main.py` and `fastwam/main_sync.py` are joint-space loops and match these checkpoints.
 - `fastwam/main_eef.py` and `fastwam/main_mask.py` expect end-effector actions, which no G1 run produces.
 
@@ -53,6 +57,7 @@ The server uses the WebSocket + msgpack protocol of `tmp/g1-client/g1_client/pol
 | Request | `image`: list of 3 RGB uint8 HWC views in order `cam_left_high`, `cam_left_wrist`, `cam_right_wrist`; `state`: float32[16], with 14 arm joints (rad, left then right: pitch, roll, yaw, elbow, wrist roll, pitch, yaw) and the left and right gripper; `prompt`: task string |
 | Response | `actions`: float32[H, 16], absolute de-normalized targets in the state layout; `server_timing` (`preprocess_ms`, `text_ms`, `model_ms`, `total_ms`); `model`; `checkpoint_step`; `num_inference_steps`; `seed` |
 | Reset `{"reset": true}` | answered with `{}` |
+| Camera preview `{"preview": true, "image": [three views]}` | shown on the web page with its 288×256 model input; no inference; answered with `{}` |
 | Invalid request or inference error | a text frame with the traceback; the client raises `RuntimeError`, and the connection stays usable |
 
 ## Inputs
@@ -79,7 +84,7 @@ The server uses the WebSocket + msgpack protocol of `tmp/g1-client/g1_client/pol
   - seed: fixed (default 42) or random per request;
   - action horizon: default 16, the trained value;
   - prompt source: the client's prompt, or a fixed task string chosen from the training tasks or typed.
-- **Last request**: the three received views, the 288×256 model input, the action chunk plotted against the current state, timing, and the request log.
+- **Last request**, refreshed every 0.5 s: the three received views and the 288×256 model input. For an inference request the page also shows the action chunk plotted against the current state, the timing and the request log; camera previews do not enter the log.
 - **Image preview**: a button runs the joint image and action inference on the last observation and shows the predicted frame 16 steps ahead.
 
 ## Verification

@@ -56,7 +56,7 @@ class WebUI:
             f"**当前服务的模型**：{labels[active.name]} step {active.step}" if active else "**当前服务的模型**：无（请先加载）",
             f"**已加载（常驻显存）**：{resident}",
             f"**GPU 显存**：已分配 {status.gpu_memory_allocated_gib:.1f} GiB，已保留 {status.gpu_memory_reserved_gib:.1f} GiB",
-            f"**请求**：成功 {status.requests_served}，失败 {status.requests_failed}",
+            f"**请求**：推理成功 {status.requests_served}，失败 {status.requests_failed}；相机预览 {status.previews}",
         ]
         if status.busy:
             lines.append(f"**正在进行**：{status.busy}")
@@ -82,18 +82,23 @@ class WebUI:
 
     # ---- last request ----------------------------------------------------------------------------------------
     def refresh(self, shown_index: int) -> tuple:
-        records = self.manager.recent(20)
+        records = self.manager.recent(50)
         status = self.status_text()
         if not records or records[-1].index == shown_index:
             return status, gr.skip(), gr.skip(), gr.skip(), gr.skip(), gr.skip(), shown_index
         last = records[-1]
         views = [(view, key) for view, key in zip(last.views, CAMERA_KEYS)]
+        if last.preview_image is not None:  # camera preview: no action chunk, keep the last plot and log
+            return status, views, last.preview_image, gr.skip(), self.record_text(last), gr.skip(), last.index
         image = last.output.model_image if last.output else None
         plot = self.action_figure(last) if last.output else None
-        return status, views, image, plot, self.record_text(last), self.log_rows(records), last.index
+        inference = [r for r in records if r.preview_image is None][-20:]
+        return status, views, image, plot, self.record_text(last), self.log_rows(inference), last.index
 
     def record_text(self, record: RequestRecord) -> str:
         when = time.strftime("%H:%M:%S", time.localtime(record.wall_time))
+        if record.preview_image is not None:
+            return f"**相机预览**（不推理、机器人不动）{when} 来自 `{record.client}`"
         if record.output is None:
             return f"**#{record.index}** {when} 来自 `{record.client}`：失败 — {record.error}"
         out = record.output
@@ -139,9 +144,9 @@ class WebUI:
         return rows
 
     def predict_image(self) -> tuple:
-        records = self.manager.recent(1)
-        if not records or records[-1].output is None:
-            raise gr.Error("还没有成功的请求；预测图基于最近一次请求的观测")
+        records = [r for r in self.manager.recent(50) if r.output is not None]
+        if not records:
+            raise gr.Error("还没有成功的推理请求；预测图基于最近一次推理请求的观测")
         last = records[-1]
         request = ObservationRequest(views=last.views, state=last.state, prompt=last.output.task)
         return last.output.model_image, self.manager.predict_image(request)
@@ -181,7 +186,7 @@ class WebUI:
                                        label="指令（训练集的 4 条任务，也可以输入新指令）")
                     apply = gr.Button("应用设置", variant="primary")
                     settings_md = gr.Markdown(self.settings_text())
-            gr.Markdown("### 最近一次请求")
+            gr.Markdown("### 最近一次请求（推理请求或相机预览，每 0.5 秒刷新）")
             record_md = gr.Markdown("还没有请求")
             with gr.Row():
                 views = gr.Gallery(label="机器人端发来的三路相机", columns=3, height=260)
@@ -201,7 +206,7 @@ class WebUI:
             apply.click(self.apply_settings, [num_steps, shift_default, shift, seed_mode, seed, horizon, prompt_mode,
                                               task], settings_md)
             predict.click(self.predict_image, None, [predict_input, predict_output])
-            gr.Timer(1.0).tick(self.refresh, shown, [status_md, views, model_image, plot, record_md, log, shown])
+            gr.Timer(0.5).tick(self.refresh, shown, [status_md, views, model_image, plot, record_md, log, shown])
         return page
 
 

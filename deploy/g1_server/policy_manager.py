@@ -16,7 +16,7 @@ import torch
 from g1_server.g1_policy import G1Policy, PolicyOutput
 from g1_server.inference_settings import InferenceSettings
 from g1_server.model_registry import spec_by_name
-from g1_server.protocol import ObservationRequest, ServerMetadata
+from g1_server.protocol import ObservationRequest, PreviewRequest, ServerMetadata
 
 DATASET_FPS = 30
 LOG_LENGTH = 50
@@ -42,6 +42,7 @@ class RequestRecord:
     views: tuple[np.ndarray, ...]  # as received
     output: PolicyOutput | None
     error: str | None
+    preview_image: np.ndarray | None = None  # model input of a camera preview (no inference), uint8 [288, 256, 3]
 
 
 @dataclass(frozen=True)
@@ -60,6 +61,7 @@ class ManagerStatus:
     busy: str | None  # GPU work in progress, e.g. "loading flux2_9b step 15000"
     requests_served: int
     requests_failed: int
+    previews: int
     gpu_memory_allocated_gib: float
     gpu_memory_reserved_gib: float
 
@@ -76,6 +78,8 @@ class PolicyManager:
         self._busy: str | None = None
         self._served = 0
         self._failed = 0
+        self._previews = 0
+        self._sequence = 0  # index of the next request record
 
     def _set_busy(self, text: str | None) -> None:
         with self._state_lock:
@@ -146,10 +150,24 @@ class PolicyManager:
                 with self._state_lock:
                     self._served += output is not None
                     self._failed += output is None
+                    self._sequence += 1
                     self._log.append(RequestRecord(
-                        index=self._served + self._failed, wall_time=time.time(), client=client,
+                        index=self._sequence, wall_time=time.time(), client=client,
                         model=policy.spec.name, step=policy.step, settings=settings, state=request.state,
                         views=request.views, output=output, error=error))
+
+    def preview(self, request: PreviewRequest, client: str) -> None:
+        """Records camera views for the web page with their model-input image; runs no inference."""
+        with self._gpu_lock:
+            policy = self.active_policy()
+            image = policy.preprocessor.to_uint8_image(policy.preprocessor.image(request.views))
+        with self._state_lock:
+            self._previews += 1
+            self._sequence += 1
+            self._log.append(RequestRecord(
+                index=self._sequence, wall_time=time.time(), client=client, model=policy.spec.name, step=policy.step,
+                settings=self._settings, state=np.zeros(0, dtype=np.float32), views=request.views, output=None,
+                error=None, preview_image=image))
 
     def predict_image(self, request: ObservationRequest) -> np.ndarray:
         with self._gpu_lock:
@@ -169,7 +187,7 @@ class PolicyManager:
             resident = tuple(ResidentPolicy(name, policy.spec.label, policy.step, policy.load_seconds)
                              for name, policy in self._policies.items())
             return ManagerStatus(active=self._active, resident=resident, settings=self._settings, busy=self._busy,
-                                 requests_served=self._served, requests_failed=self._failed,
+                                 requests_served=self._served, requests_failed=self._failed, previews=self._previews,
                                  gpu_memory_allocated_gib=torch.cuda.memory_allocated(self.device) / 2**30,
                                  gpu_memory_reserved_gib=torch.cuda.memory_reserved(self.device) / 2**30)
 

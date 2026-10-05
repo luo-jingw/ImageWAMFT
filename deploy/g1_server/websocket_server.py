@@ -14,7 +14,7 @@ from websockets.exceptions import ConnectionClosed
 
 from g1_server.msgpack_numpy import packb, unpackb
 from g1_server.policy_manager import PolicyManager
-from g1_server.protocol import ActionResponse, ResetRequest, parse_request
+from g1_server.protocol import ActionResponse, PreviewRequest, ResetRequest, parse_request
 
 log = logging.getLogger("g1_server.websocket")
 
@@ -43,6 +43,10 @@ class PolicyWebSocketServer:
                 try:
                     request = parse_request(unpackb(message))
                     if isinstance(request, ResetRequest):
+                        await connection.send(packb({}))
+                        continue
+                    if isinstance(request, PreviewRequest):
+                        await asyncio.to_thread(self.manager.preview, request, client)
                         await connection.send(packb({}))
                         continue
                     output = await asyncio.to_thread(self.manager.infer, request, client)
