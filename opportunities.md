@@ -110,7 +110,10 @@ Area: visual robustness (augmentation)
 
 ## Observation
 
-The released ImageWAM-FLUX.2-4B LIBERO checkpoint loses success on the unmasked Spatial suite when the simulator renders with EGL instead of OSMesa: 34/39 against 50/50. The other settings are identical, including a fixed inference noise seed (`research/libero_token_mask/`).
+The released ImageWAM-FLUX.2-4B LIBERO checkpoint succeeds less often on the unmasked Spatial suite when the simulator renders with EGL instead of OSMesa (`research/libero_token_mask/`). The other settings are identical, including inference and environment seed 42 and the initial states.
+- On the 39 matched task × initial-state pairs: EGL 34/39, OSMesa 39/39.
+- All 5 discordant pairs failed under EGL only: tasks 3, 4, 5, 7, 9.
+- Exact McNemar test: p = 0.0625. The difference is not significant at this sample size.
 - On the same state, the two backends differ by 1–2 gray levels on 54–58% of pixels.
 - EGL is darker by 0.7–0.9 levels on average and slightly softer (gradient energy 0.95–0.98 of OSMesa).
 - Only 0.6–1.3% of pixels differ by more than 10, and edge pixels carry 23–28% of the difference.
@@ -131,6 +134,7 @@ If the action expert reads features that move under sub-level pixel changes, tra
 
 ## Required Evidence
 
+0. A powered paired comparison, e.g. 10 tasks × 20 initial states under EGL, OSMesa seed 42 and OSMesa seed 43.
 1. Closed-loop variance without a visual change: the unmasked Spatial success rate under OSMesa for several inference noise seeds. A spread comparable to the EGL drop means closed-loop amplification of any perturbation, not visual sensitivity.
 2. Open-loop sensitivity on identical states: the action deviation between EGL and OSMesa renderings of the saved simulator states, compared with the deviation from a different noise seed and from masking 1/3 of the image tokens.
 
