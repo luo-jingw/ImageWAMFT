@@ -283,10 +283,11 @@ def main() -> None:
         env, task_description = get_libero_env(task, LIBERO_ENV_RESOLUTION, cfg.get("seed"))
         unit_dir = args.out_dir / suite / f"task{task_id:02d}"
         unit_dir.mkdir(parents=True, exist_ok=True)
-        tag = f"frac{fraction:.3f}"
+        tag = f"frac{round(fraction * 1000):04d}"  # no decimal point: frac0000, frac0333, frac0667
         for trial in range(args.trials):
-            stem = unit_dir / f"trial{trial}_{tag}"
-            if stem.with_suffix(".json").exists():
+            name = f"trial{trial}_{tag}"
+            json_path, npz_path = unit_dir / f"{name}.json", unit_dir / f"{name}.npz"
+            if json_path.exists():
                 continue
             seed = [SUITES.index(suite), task_id, trial]
             rng = np.random.default_rng(seed)
@@ -295,8 +296,8 @@ def main() -> None:
                                                  fraction, rng)
             arrays = {key: np.stack(value) for key, value in calls.items() if value}
             arrays["token_mask"] = np.packbits(arrays["token_mask"], axis=1)
-            np.savez_compressed(stem.with_suffix(".npz"), **arrays)
-            save_rollout_video(str(unit_dir), replay, f"trial{trial}_{tag}", success=success,
+            np.savez_compressed(npz_path, **arrays)
+            save_rollout_video(str(unit_dir), replay, name, success=success,
                                task_description=task_description)
             meta = {"suite": suite, "task_id": task_id, "task": task_description, "trial": trial,
                     "initial_state_index": trial, "mask_fraction": fraction,
@@ -304,7 +305,7 @@ def main() -> None:
                     "success": success, "inference_calls": len(calls["t"]),
                     "episode_steps": int(calls["episode_steps"][0]), "mask_rng_seed": seed,
                     "wall_seconds": round(time.time() - start, 1), "worker": args.worker_index}
-            stem.with_suffix(".json").write_text(json.dumps(meta, indent=1))
+            json_path.write_text(json.dumps(meta, indent=1))
             print(json.dumps(meta), flush=True)
         env.close()
 
