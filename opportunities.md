@@ -101,3 +101,39 @@ Qwen-Image-2.1 results under D1 compared with the FLUX.2-9B run on the same vali
 ## Promotion Condition
 
 The Qwen-Image-2.1 run under D1 falls clearly behind expectations, or fails to separate tasks that differ only in instruction or scene.
+
+# OPT-005
+
+Status: Proposed
+
+Area: visual robustness (augmentation)
+
+## Observation
+
+The released ImageWAM-FLUX.2-4B LIBERO checkpoint loses success on the unmasked Spatial suite when the simulator renders with EGL instead of OSMesa: 34/39 against 50/50. The other settings are identical, including a fixed inference noise seed (`research/libero_token_mask/`).
+- On the same state, the two backends differ by 1–2 gray levels on 54–58% of pixels.
+- EGL is darker by 0.7–0.9 levels on average and slightly softer (gradient energy 0.95–0.98 of OSMesa).
+- Only 0.6–1.3% of pixels differ by more than 10, and edge pixels carry 23–28% of the difference.
+- The checkpoint was trained with photometric augmentation an order of magnitude stronger than this shift: `VideoAugmentation` with p 0.65, color jitter brightness/contrast 0.3, saturation 0.25, hue 0.04, plus corruption types. The G1 configuration has a similar augmentation, with gamma 0.9–1.1.
+
+## Opportunity
+
+Pick a training-time augmentation for perturbations of this size and type, once the source of the sensitivity is known. Candidates:
+- per-pixel quantization noise of ±1–2 gray levels;
+- small global gray-level offsets;
+- light blur and sharpening;
+- training on mixed renderers;
+- an action-consistency loss between a clean and a perturbed view of the same state.
+
+## Expected Mechanism
+
+If the action expert reads features that move under sub-level pixel changes, training on such changes makes its actions invariant to them.
+
+## Required Evidence
+
+1. Closed-loop variance without a visual change: the unmasked Spatial success rate under OSMesa for several inference noise seeds. A spread comparable to the EGL drop means closed-loop amplification of any perturbation, not visual sensitivity.
+2. Open-loop sensitivity on identical states: the action deviation between EGL and OSMesa renderings of the saved simulator states, compared with the deviation from a different noise seed and from masking 1/3 of the image tokens.
+
+## Promotion Condition
+
+The renderer-induced open-loop action deviation is comparable to or larger than the seed-induced deviation, and the success drop exceeds the seed-to-seed spread.
