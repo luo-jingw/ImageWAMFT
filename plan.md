@@ -1,6 +1,6 @@
 # Plan
 
-Plan Status: approved
+Plan Status: completed
 
 # Problem
 
@@ -859,7 +859,7 @@ Same as Phase 6.
 
 ## Phase 15
 
-Phase Status: pending
+Phase Status: completed
 
 Round: 7
 
@@ -889,7 +889,7 @@ One table per run covering configuration, step count, wall-clock time, peak memo
 
 ## Phase 16
 
-Phase Status: active
+Phase Status: completed
 
 Round: 7
 
@@ -1051,7 +1051,7 @@ Driven through the Gradio client API while `replay_check.py` sends requests:
 
 ## Phase 21
 
-Phase Status: active
+Phase Status: completed
 
 Round: 11
 

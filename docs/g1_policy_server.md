@@ -88,26 +88,26 @@ The server uses the WebSocket + msgpack protocol of `tmp/g1-client/g1_client/pol
   |---|---|---|---|---|---|---|
   | FLUX.2-klein-base-4B | 27,950 | 13.5 s | 8.9 GiB | 0.026 | 156 ms | 170 ms |
   | Qwen-Image-2.1 | 27,950 | 20.5 s | 15.5 GiB | 0.027 | 237 ms | 258 ms |
-  | FLUX.2-klein-base-9B | 20,000 (run in progress) | 39.1 s | 19.2 GiB | 0.028 | 213 ms | 234 ms |
+  | FLUX.2-klein-base-9B | 27,950 | 34.8 s | 19.2 GiB | 0.025 | 202 ms | 215 ms |
 
 - **FLUX.2 online text encoding vs. the training cache** (four task strings):
   - Masks are equal.
   - Relative L2 difference of the features is 0.05–0.08% (4B) and 0.07–0.11% (9B), bf16 rounding.
   - Resulting actions differ by 0.0002–0.0004 rad on average and at most 0.0085 rad.
-  - The lazily loaded Qwen3 encoder raises GPU memory to 16.2 GiB (4B) and 34.2 GiB (9B).
+  - The lazily loaded Qwen3 encoder raises GPU memory to 16.2 GiB (4B) and 35.1 GiB (9B).
 - **Replay through the robot client** (`replay_check.py`; server started with `launch/g1_server.sh` on one H100 NVL; 40 samples, every 64 frames of the four held-out episodes). Every response is float32 [16, 16].
 
   | Model | Arm L1 (rad) | Gripper L1 | Camera path vs. raw frames, action L1 | Round trip, median | Server model time, median |
   |---|---|---|---|---|---|
   | FLUX.2-klein-base-4B, step 27,950 | 0.022 | 0.028 | 0.0010 | 192 ms | 184 ms |
   | Qwen-Image-2.1, step 27,950 | 0.022 | 0.036 | 0.0010 | 261 ms | 249 ms |
-  | FLUX.2-klein-base-9B, step 20,000 | 0.023 | 0.036 | 0.0010 | 236 ms | 225 ms |
+  | FLUX.2-klein-base-9B, step 27,950 | 0.022 | 0.031 | 0.0010 | 235 ms | 223 ms |
 
   - The robot camera path (256×320 INTER_AREA resize and JPEG quality 90) changes the actions by 0.001 rad on average.
   - Latency is measured while three LIBERO evaluation jobs ran on other GPUs of the node.
-  - Per task (FLUX.2-4B), the drawer task has the largest arm error, 0.042 rad; the other three are 0.014–0.019 rad.
+  - Per task, the drawer task has the largest arm error, 0.042 rad for both FLUX.2 models; the other three are 0.014–0.019 rad.
 - **Web page** (driven through its Gradio API with the server running):
-  - Loading through the page takes 21.0 s for Qwen-Image-2.1 and 39.1 s for the 9B model.
+  - Loading through the page takes 21.0 s for Qwen-Image-2.1 and 40.3 s for the 9B model.
   - With all three models resident, 42.9 GiB is allocated, and switching to a resident model takes 0.07 s.
   - A settings change (20 steps, a random seed) appears in the next response: `num_inference_steps` 20, a new seed per request, model time 324–346 ms. Restoring 10 steps and seed 42 returns to 197 ms.
   - 240 requests were served without failure.

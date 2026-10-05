@@ -4,7 +4,8 @@ The client is `FastWAMPolicy` from `tmp/g1-client/fastwam/fastwam_policy.py`, un
 three cameras through the robot camera path (`g1_client/camera_client.py` resize of the 480×640 BGR frame to 256×320
 with INTER_AREA, JPEG quality 90; `fastwam/main.py` decode and BGR→RGB), the raw state and the task string. Reported
 per request and summarized:
-  - action L1 (rad) against the recorded actions t..t+15, arm joints and grippers separately;
+  - action L1 (rad) against the recorded actions t..t+15, arm joints and grippers separately, for the camera path and
+    for the raw 480×640 frames (the training preprocessing input);
   - action L1 between the camera path and the raw 480×640 frames with the same seed (camera-path effect);
   - response shape and dtype, client round trip and server timing.
 
@@ -65,6 +66,8 @@ def main() -> None:
                      "arm_l1": float(np.abs(actions[:, :14] - recorded[:, :14]).mean()),
                      "gripper_l1": float(np.abs(actions[:, 14:] - recorded[:, 14:]).mean()),
                      "camera_path_l1": float(np.abs(actions - full).mean()),
+                     "raw_arm_l1": float(np.abs(full[:, :14] - recorded[:, :14]).mean()),
+                     "raw_gripper_l1": float(np.abs(full[:, 14:] - recorded[:, 14:]).mean()),
                      "round_trip_ms": timing["total_s"] * 1e3, "server_total_ms": response["server_timing"]["total_ms"],
                      "server_model_ms": response["server_timing"]["model_ms"], "bytes_sent": timing["bytes_sent"]})
         print(json.dumps(rows[-1]), flush=True)
@@ -76,9 +79,14 @@ def main() -> None:
                "arm_l1_rad": float(np.mean([r["arm_l1"] for r in rows])),
                "gripper_l1": float(np.mean([r["gripper_l1"] for r in rows])),
                "camera_path_l1": float(np.mean([r["camera_path_l1"] for r in rows])),
+               "raw_arm_l1_rad": float(np.mean([r["raw_arm_l1"] for r in rows])),
+               "raw_arm_l1_se": float(np.std([r["raw_arm_l1"] for r in rows], ddof=1) / np.sqrt(len(rows))),
+               "raw_gripper_l1": float(np.mean([r["raw_gripper_l1"] for r in rows])),
                "round_trip_ms_median": float(np.median([r["round_trip_ms"] for r in rows[1:]])),
                "server_model_ms_median": float(np.median([r["server_model_ms"] for r in rows[1:]])),
-               "per_task_arm_l1": {task: float(np.mean([r["arm_l1"] for r in group])) for task, group in by_task.items()}}
+               "per_task_arm_l1": {task: float(np.mean([r["arm_l1"] for r in group])) for task, group in by_task.items()},
+               "per_task_raw_arm_l1": {task: float(np.mean([r["raw_arm_l1"] for r in group]))
+                                       for task, group in by_task.items()}}
     print(json.dumps(summary, indent=1))
     if args.out:
         args.out.write_text(json.dumps({"summary": summary, "rows": rows}, indent=1))
