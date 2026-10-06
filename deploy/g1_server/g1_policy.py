@@ -18,6 +18,7 @@ from omegaconf import DictConfig, OmegaConf
 from imagewam.datasets.lerobot.utils.normalizer import load_dataset_stats_from_json
 from imagewam.models.backbones.imagewam import ImageWAM
 
+from g1_server.action_safety import ActionSafetyLimits
 from g1_server.inference_settings import InferenceSettings
 from g1_server.model_registry import PROJECT_ROOT, ModelSpec, weights_path
 from g1_server.observation_preprocessor import G1ObservationPreprocessor
@@ -75,6 +76,7 @@ class G1Policy:
         self.prompts = prompts
         self.load_seconds = load_seconds
         self.tasks = training_tasks(list(cfg.data.val.dataset_dirs))
+        self.safety_limits = ActionSafetyLimits.from_dataset_stats(spec.run_dir / "dataset_stats.json")
         self.default_sigma_shift = float(cfg.model.action_scheduler.infer_shift)
 
     @classmethod

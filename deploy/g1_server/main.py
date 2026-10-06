@@ -7,7 +7,6 @@ The GPU is chosen with CUDA_VISIBLE_DEVICES; see `launch/g1_server.sh` and `docs
 
 import argparse
 import logging
-import socket
 import threading
 from pathlib import Path
 
@@ -45,7 +44,7 @@ def main() -> None:
     server = PolicyWebSocketServer(manager, args.host, args.ws_port)
     thread = threading.Thread(target=server.serve_forever, name="policy-websocket", daemon=True)
     thread.start()
-    page = build_web_ui(manager, f"ws://{socket.gethostname()}:{args.ws_port}")
+    page = build_web_ui(manager, server)
     page.queue(default_concurrency_limit=4).launch(server_name=args.host, server_port=args.ui_port, share=args.share,
                                                    auth=auth)
 

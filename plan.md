@@ -46,6 +46,10 @@ Neither target model can be trained on LGG100 with the paper's real-world recipe
    - It returns de-normalized 16-dim joint-space action chunks.
    - It preprocesses observations exactly as training did.
    - A local web page (Gradio) switches the model and checkpoint and edits the inference settings.
+7. Serving safety controls for robot tests:
+   - output modes: execute, inference only, stop;
+   - an action safety check;
+   - WebSocket port change and connection management from the web page.
 
 Out of scope: running the physical-robot evaluation itself.
 
@@ -84,6 +88,8 @@ Constraint check against this goal:
 | M22 | WebSocket server | FastWAM-compatible endpoint over M17, M18 and M21 |
 | M23 | Web UI | Gradio page: model and checkpoint selection, settings, last observation, action chunk and latency |
 | M24 | Server entry, launcher and record | Process entry point, tmux launcher, offline replay check through the unmodified client, `docs/g1_policy_server.md` |
+| M25 | Serving controls | Output mode and safety-check thresholds, owned by `PolicyManager` |
+| M26 | Action safety check | Per-request check of the action chunk against the training action range and the current state |
 
 ## Decisions
 
@@ -149,6 +155,23 @@ Constraint check against this goal:
 - **D19 Serving dependencies in `.venv`.**
   - `websockets` and `gradio` 6 are installed into `.venv` under a constraint file holding the previous `.venv` freeze, so no existing package changes version.
   - gradio 4 and 5 require pillow < 12 and conflict with the pinned pillow 12.0.
+- **D20 Output modes**, set on the web page. They apply to the next request.
+
+  | Mode | Inference | Reply to the robot | Robot |
+  |---|---|---|---|
+  | execute | yes | the model's chunk, if it passes D21 | moves |
+  | inference only (startup default) | yes, shown on the page | a hold chunk: the request's own state repeated H times | holds still and keeps sending observations |
+  | stop | no | an error text frame | `fastwam/main.py` raises, runs its cleanup and returns arm authority |
+
+  Switching to execute requires a confirmation checkbox on the page.
+- **D21 Action safety check**, on every inferred chunk:
+  - **Range:** every value lies within the run's training action range (`dataset_stats.json` → `action.global_min/max`), widened by a margin of 10% of the range.
+  - **First-step jump:** the largest arm-joint difference between the first action and the request's state is at most 0.3 rad. In LGG100 this difference has p99 0.148 rad and p99.9 0.265 rad over 185,673 frames.
+  - **On violation in execute mode:** a hold chunk is returned and the request is flagged.
+  - Thresholds and on/off are edited on the page.
+- **D22 Port and connections.**
+  - The page can move the WebSocket listener to another port (1024–65535). A port that cannot be bound leaves the old listener running.
+  - The page lists the connected clients and can close all connections. A closed client raises and runs its cleanup.
 
 ## Responsibilities
 
@@ -171,6 +194,8 @@ Constraint check against this goal:
 | Trained weights and training state | `Trainer` → `checkpoints/<run_name>/checkpoints/{weights,state}/` (project root, git-ignored) | later deployment |
 | Resident policies, active policy, inference settings, request log | `PolicyManager` (M21) | M22 (inference), M23 (display and edits through `PolicyManager` methods) |
 | Server prompt-feature cache | `PromptFeatureStore` (M19) → `deploy/g1_server/cache/` (git-ignored) | M19 |
+| Output mode, safety thresholds | `PolicyManager` (M21), through `ServingControls` (M25) | M22, M23 |
+| WebSocket port and connected clients | `PolicyWebSocketServer` (M22) | M23 (display; port change and disconnect through its methods) |
 | Local paths (FLUX.2 source, weights, data root) | `ImageWAM/.env.local`, git-ignored, contents documented in `PROJECT.md` | `ImageWAM/scripts/common.sh` |
 
 # Interface
@@ -371,6 +396,8 @@ All paths are relative to the project root.
 | M22 | `deploy/g1_server/websocket_server.py` (new) |
 | M23 | `deploy/g1_server/web_ui.py` (new) |
 | M24 | `deploy/g1_server/main.py` (new), `deploy/g1_server/replay_check.py` (new), `launch/g1_server.sh` (new), `docs/g1_policy_server.md` (new) |
+| M25 | `deploy/g1_server/serving_controls.py` (new) |
+| M26 | `deploy/g1_server/action_safety.py` (new) |
 
 ## Interfaces
 
@@ -1085,3 +1112,105 @@ Phase 20; Phase 16 for the final 9B checkpoint row
   - settings;
   - the robot-side command;
   - per-model replay results and latency, including the final 9B checkpoint.
+
+## Phase 22
+
+Phase Status: completed
+
+Round: 12
+
+### Goal
+
+Output modes and the action safety check in the policy manager (M25, M26, D20, D21).
+
+### Files
+
+`deploy/g1_server/{serving_controls,action_safety,policy_manager,protocol,websocket_server}.py`
+
+### Structures
+
+`OutputMode`, `ServingControls`, `SafetyVerdict`, `ActionSafetyLimits`, `ServedChunk`
+
+### Affected Modules
+
+M21, M22, M25, M26
+
+### Dependencies
+
+Phase 21
+
+### Observation
+
+With a stub policy and the unmodified `FastWAMPolicy` client:
+- **Inference only:** the reply equals the request state repeated, and the prediction is recorded.
+- **Execute:** the reply is the model chunk.
+- **Stop:** the client raises `RuntimeError`.
+- **Safety:** a chunk out of range or with a large first-step jump returns a hold chunk and is flagged.
+
+## Phase 23
+
+Phase Status: completed
+
+Round: 13
+
+### Goal
+
+WebSocket port change and connection management (D22).
+
+### Files
+
+`deploy/g1_server/websocket_server.py`, `deploy/g1_server/main.py`
+
+### Structures
+
+`ClientConnection` record
+
+### Affected Modules
+
+M22, M24
+
+### Dependencies
+
+Phase 22
+
+### Observation
+
+With a stub policy:
+- After a port change, a client connects on the new port and the old port refuses.
+- An unbindable port keeps the old listener.
+- Disconnect-all makes a connected client raise.
+
+## Phase 24
+
+Phase Status: completed
+
+Round: 14
+
+### Goal
+
+Safety controls on the web page and the record (M23, M24).
+
+### Files
+
+`deploy/g1_server/web_ui.py`, `docs/g1_policy_server.md`
+
+### Structures
+
+none
+
+### Affected Modules
+
+M23, M24
+
+### Dependencies
+
+Phase 23
+
+### Observation
+
+On the running server, driven through the page API and `replay_check.py`:
+- inference only returns the hold chunk for every request;
+- execute returns the model chunk (arm L1 as before);
+- the safety check flags no held-out request at default thresholds, with the largest observed first-step jump reported;
+- a port change moves the client;
+- stop makes the client raise.

@@ -53,12 +53,37 @@ The server uses the WebSocket + msgpack protocol of `tmp/g1-client/g1_client/pol
 
 | Message | Content |
 |---|---|
-| Metadata, sent on connect | `policy`, `model`, `checkpoint_step`, `camera_keys`, `state_dim` 16, `action_dim` 16, `action_horizon`, `action_layout`, `fps` 30 |
+| Metadata, sent on connect | `policy`, `model`, `checkpoint_step`, `camera_keys`, `state_dim` 16, `action_dim` 16, `action_horizon`, `action_layout`, `fps` 30, `output_mode` |
 | Request | `image`: list of 3 RGB uint8 HWC views in order `cam_left_high`, `cam_left_wrist`, `cam_right_wrist`; `state`: float32[16], with 14 arm joints (rad, left then right: pitch, roll, yaw, elbow, wrist roll, pitch, yaw) and the left and right gripper; `prompt`: task string |
-| Response | `actions`: float32[H, 16], absolute de-normalized targets in the state layout; `server_timing` (`preprocess_ms`, `text_ms`, `model_ms`, `total_ms`); `model`; `checkpoint_step`; `num_inference_steps`; `seed` |
+| Response | `actions`: float32[H, 16], absolute de-normalized targets in the state layout, either the model's chunk or a hold chunk (see Safety Controls); `actions_source` (`model` or `hold`); `output_mode`; `safety_ok` and `safety_reasons`; `server_timing` (`preprocess_ms`, `text_ms`, `model_ms`, `total_ms`); `model`; `checkpoint_step`; `num_inference_steps`; `seed` |
 | Reset `{"reset": true}` | answered with `{}` |
 | Camera preview `{"preview": true, "image": [three views]}` | shown on the web page with its 288×256 model input; no inference; answered with `{}` |
+| Observation in the stop mode | a text frame `ServingStopped: …`; the client raises `RuntimeError` |
 | Invalid request or inference error | a text frame with the traceback; the client raises `RuntimeError`, and the connection stays usable |
+
+## Safety Controls
+
+Set at the top of the web page and applied to the next request. A banner shows the current output mode, the safety-check settings and the robot-side address.
+
+| Output mode | Inference | Reply to the robot | Robot (`fastwam/main.py`) |
+|---|---|---|---|
+| Inference only (startup default) | yes, shown on the page | a hold chunk: the request's own 16-dim state repeated H times | holds still and keeps sending observations |
+| Execute | yes | the model's chunk if it passes the safety check, otherwise a hold chunk | moves |
+| Stop | no | `ServingStopped` error text | raises, runs its cleanup and returns arm authority to the locomotion service |
+
+- **Mode changes:**
+  - Switching to execute requires a confirmation checkbox.
+  - A stop button switches to stop immediately.
+  - The controls are read again after each inference, so a switch made during an inference already applies to its reply.
+- **Action safety check** (`deploy/g1_server/action_safety.py`), applied to every inferred chunk; thresholds editable on the page:
+  - **Range:** every value lies within the run's training action range (`dataset_stats.json` → `action.global_min/max`), widened by 10% of the range on each side.
+  - **First-step jump:** the largest arm-joint difference between the first action and the request's state is at most 0.3 rad. Grippers are excluded, because they open and close within single steps.
+  - **Why 0.3 rad:** in LGG100 the recorded action-to-state difference is p50 0.035, p99 0.148 and p99.9 0.265 rad over 185,673 frames.
+  - In execute mode a failed chunk is replaced by a hold chunk. The reasons appear on the page and in the request log.
+- **Connections:**
+  - **Port change:** the page moves the WebSocket listener to another port (1024–65535). It binds the new port first; a port that cannot be bound leaves the old listener running. Clients connected to the old port are closed and must reconnect to the new one.
+  - **Client list and disconnect:** the page lists the connected clients and can close all connections; a closed client raises and runs its cleanup.
+  - A restarted server starts on `WS_PORT` again, in the inference-only mode.
 
 ## Inputs
 
@@ -86,6 +111,7 @@ The server uses the WebSocket + msgpack protocol of `tmp/g1-client/g1_client/pol
   - prompt source: the client's prompt, or a fixed task string chosen from the training tasks or typed.
 - **Last request**, refreshed every 0.5 s: the three received views and the 288×256 model input. For an inference request the page also shows the action chunk plotted against the current state, the timing and the request log; camera previews do not enter the log.
 - **Image preview**: a button runs the joint image and action inference on the last observation and shows the predicted frame 16 steps ahead.
+- **Request record**: per inference request, the output mode, what was sent (model actions, hold in inference-only mode, hold after a failed safety check, or rejected in stop mode), the safety-check result and the largest first-step arm jump.
 
 ## Verification
 
@@ -128,3 +154,16 @@ The server uses the WebSocket + msgpack protocol of `tmp/g1-client/g1_client/pol
   - `{}` for a reset;
   - a float32 [H, 16] action chunk (H follows the setting);
   - `RuntimeError` for a malformed request, after which the same connection keeps working.
+- **Safety controls** (2026-10-05; the server on one H100 NVL with all three models resident; FLUX.2-4B active; unmodified `FastWAMPolicy` client; held-out LGG100 samples):
+  - **Inference only (startup default):** 40 of 40 replies are hold chunks equal to the request state.
+  - **Confirmation:** switching to execute without the confirmation is refused.
+  - **Execute,** 316 held-out samples:
+    - every reply carries the model's chunk, and the safety check flags none of them;
+    - the model's first-step arm jump has median 0.037, p99 0.120 and max 0.162 rad;
+    - arm L1 to the recorded actions is 0.0209 rad, as before.
+  - **Port change:** moving to port 8001 closes 8000, and the old connection is closed (`ConnectionClosedOK`).
+  - **Stop:** the stop button makes the next request raise `ServingStopped` in the client.
+  - **Without GPU,** with a stub policy:
+    - a first-step jump of 0.5 rad and out-of-range values each return a hold chunk with the reason;
+    - a move to an occupied port raises `OSError` and keeps the old listener;
+    - closing all connections makes the client raise.
