@@ -4,6 +4,8 @@
 # RENDER=osmesa (default, as the official evaluation) renders on the CPU with the project Mesa 24.3 in
 # .osmesa-libero; RENDER=egl renders on the GPU (pixels differ from OSMesa, see PLAN.md). CONDITIONS selects the
 # strategy:n conditions (default: eval_token_mask.DEFAULT_CONDITIONS).
+# EVAL_SCRIPT selects the evaluator (default research/libero_token_mask/eval_token_mask.py; also
+# research/libero_quant/eval_quant.py, which takes quantization config names in CONDITIONS).
 # Workers start STAGGER_SECONDS apart: concurrent start-up of several workers on one GPU aborted in the EGL/CUDA
 # initialization. WORKER_INDICES restarts selected shards (shard i is units[i::num_workers]; finished episodes are
 # skipped).
@@ -18,6 +20,7 @@ NUM_WORKERS=$(( ${#GPU_LIST[@]} * WORKERS_PER_GPU ))
 mkdir -p "${OUT}/logs"
 export LIBERO_CONFIG_PATH="${PROJECT_ROOT}/research/libero_token_mask/libero_config"
 export HF_HUB_OFFLINE=1
+EVAL_SCRIPT="${EVAL_SCRIPT:-${PROJECT_ROOT}/research/libero_token_mask/eval_token_mask.py}"
 RENDER="${RENDER:-osmesa}"
 case "${RENDER}" in
   osmesa)
@@ -40,7 +43,7 @@ for w in "${INDICES[@]}"; do
       code=0
       CUDA_VISIBLE_DEVICES="${gpu}" MUJOCO_EGL_DEVICE_ID="${gpu}" \
         "${PROJECT_ROOT}/.venv-libero/bin/python" -X faulthandler \
-        "${PROJECT_ROOT}/research/libero_token_mask/eval_token_mask.py" \
+        "${EVAL_SCRIPT}" \
         --out-dir "${OUT}" --worker-index "${w}" --num-workers "${NUM_WORKERS}" "${CONDITION_ARGS[@]}" \
         >> "${OUT}/logs/worker${w}.log" 2>&1 || code=$?
       if (( code == 0 )); then break; fi
