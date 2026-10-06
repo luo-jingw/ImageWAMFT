@@ -5,7 +5,8 @@
 # .osmesa-libero; RENDER=egl renders on the GPU (pixels differ from OSMesa, see PLAN.md). CONDITIONS selects the
 # strategy:n conditions (default: eval_token_mask.DEFAULT_CONDITIONS).
 # EVAL_SCRIPT selects the evaluator (default research/libero_token_mask/eval_token_mask.py; also
-# research/libero_quant/eval_quant.py, which takes quantization config names in CONDITIONS).
+# research/libero_quant/eval_quant.py and research/libero_register/eval_register.py, which take quantization or
+# register config names in CONDITIONS).
 # Workers start STAGGER_SECONDS apart: concurrent start-up of several workers on one GPU aborted in the EGL/CUDA
 # initialization. WORKER_INDICES restarts selected shards (shard i is units[i::num_workers]; finished episodes are
 # skipped).
