@@ -14,8 +14,8 @@ dataset/
 BaseModel/
 tmp/
 
-# Derived files
-papers/*.txt
+# Papers: the arXiv PDF may not be redistributed (arXiv non-exclusive license); kept locally only
+papers/
 
 # Tool-local state
 .aris/

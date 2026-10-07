@@ -107,7 +107,7 @@ package registries, model hubs, cloud APIs).
 |---|---|---|---|
 | Hugging Face Hub | project | `HF_TOKEN` file at the project root, passed per command as `HF_TOKEN="$(tr -d '[:space:]' < HF_TOKEN)"` | Account JingwuLuo, fine-grained token. It has access to the gated `black-forest-labs/FLUX.2-klein-base-9B`, `FLUX.2-klein-base-4B` and `FLUX.2-dev`. The machine-wide default token belongs to a different account and is not used. |
 | Git commit identity | repository | repository-local `.git/config`: `user.name` Jingwu Luo, `user.email` grouponeclaude@gmail.com | The machine-wide git identity is a shared-machine default and is not used. |
-| Git remote | repository | none | The repository is local-only. No remote is configured, and the local `.git/hooks/pre-push` hook rejects every push. |
+| Git remote | repository | `https://github.com/luo-jingw/ImageFT` (public); token file `/home/user1/workspace/jingwu/github_token` (outside the repository), read per command by a credential helper in `launch/publish_github.sh` | Publishing runs only through `launch/publish_github.sh`. It pushes a scratch-clone copy of `main` with `papers/` removed from every commit (the arXiv PDF may not be redistributed), so published hashes differ from the local ones. The local repository has no remote configured, and its `.git/hooks/pre-push` hook still rejects direct pushes. |
 
 Do not assume a global or default identity applies.
 See `AGENTS.md` → Credentials and Environment Isolation.
@@ -137,6 +137,6 @@ Do not record token values or other secrets here.
 
 ## Onboarding
 
-- Read `AGENTS.md`, this file, `papers/ImageWAM_2606.19531.pdf`, `docs/imagewam_paper_recipe.md` and `docs/lgg100_dataset.md`.
+- Read `AGENTS.md`, this file, the ImageWAM paper (arXiv 2606.19531; a local copy is `papers/ImageWAM_2606.19531.pdf`, git-ignored), `docs/imagewam_paper_recipe.md` and `docs/lgg100_dataset.md`.
 - Activate the environment with `source .venv/bin/activate`. The training launchers call `accelerate` from `PATH`.
 - Download from Hugging Face with the project token only: `HF_TOKEN="$(tr -d '[:space:]' < HF_TOKEN)" hf download ...`.
