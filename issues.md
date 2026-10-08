@@ -290,3 +290,32 @@ The first Qwen-Image-2.1 G1 smoke run (`nnmc72` GPUs 4,5; ZeRO-2; bf16; 4 per GP
 - Enabled through `deepspeed_cache_used_param_count: true` (default in `configs/train.yaml`) and applied by the trainer before DeepSpeed initialization.
 - Result on the same GPUs: backward 0.69 s per micro-batch and 0.15 steps/s, about 52 h for the full run.
 - The running FLUX.2-4B process started before the patch and has the same overhead on its smaller parameter set. Its math is unaffected.
+
+# ISSUE-010
+
+Status: Open
+
+Area: shared nodes (RoboTwin text cache)
+
+## Observation
+
+All 8 Qwen-Image-2.1 cache processes on `nnmc72` (GPUs 0–3, `plan.md` Phase 3) exited at 12:37:05 PDT on 2026-10-08. The launcher's `wait` returned and the job printed `finished`, but each shard had written only about 21,400 of its 115,129 prompts.
+
+## Evidence
+
+- No shard log has an error or traceback; each ends with an ordinary `wrote …` line. The logs are kept in `checkpoints/robotwin_logs/qwen_cache_run1/`.
+- The 8 processes stopped within the same second. Free memory on `nnmc72` was 724 GB afterwards. Nothing of this project ran on `nnmc72` at that time besides the cache.
+- The FLUX.2-9B cache on `nnmc71` was not affected.
+
+## Hypotheses
+
+- An external signal, since all processes stopped together and Python printed nothing. Other people's jobs run under the same `user1` account (PROJECT.md), so another session could have killed them.
+- An OOM kill is less likely, given the free memory.
+
+## Next Experiment
+
+The restarted job (12:49 PDT) writes each shard's exit code to its log: 137 means SIGKILL, 143 means SIGTERM. Cache writes are atomic (`.tmp`, then `os.replace`), so finished files are valid and the restart skips them.
+
+## Resolution
+
+Open.

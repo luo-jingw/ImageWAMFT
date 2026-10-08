@@ -73,6 +73,8 @@ From the released `config.yaml` and `model.pt`:
 ## Evaluation Protocol
 
 - Paper: 50 tasks, clean and randomized settings, 100 trials per task.
+  - The paper text states "100 trials per task" for RoboTwin. Table 12's FLUX.2-4B column has odd percentages (99, 67, 81), which 50 trials cannot produce; its OmniGen2 column is marked "50 trials".
+  - The paper's "50 trials per task" refers to its real-world tasks.
 - Repository launcher `scripts/flux2/run_eval_flux2_robotwin.sh`:
   - Defaults: 50 episodes per task, `action_horizon` 16, `replan_steps` 16, phases clean and random.
   - It always composes the `_clean_` task config; its model settings equal the non-clean config.
@@ -81,6 +83,16 @@ From the released `config.yaml` and `model.pt`:
 - Seeds: the evaluator starts at seed `100000 × (1 + seed)` with `seed` 42. It keeps only seeds where the expert planner succeeds.
 - Simulator: SAPIEN with Vulkan. `vulkaninfo` on `nnmc71` lists the H100 GPUs.
   - The upstream installer `scripts/setup/install_robotwin_env.sh` installs into the training `.venv`, so the evaluation environment must be separate.
+  - The aloha-agilex embodiment config sets `planner: "curobo"`, so the expert check that selects the evaluation seeds needs cuRobo.
+- Instruction draw: after `setup_demo(seed)` the loop fills templates with Python `random` and picks one with `np.random.choice`.
+  - `setup_demo` reseeds numpy and torch but not Python `random` (`envs/_base_task.py` comments out `random.seed`).
+  - An episode's instruction therefore depends on the process's earlier calls to `random`, not only on its seed.
+- Text encoding: the FLUX.2 policy encodes each instruction online with its own Qwen3 encoder (`model.load_text_encoder=true`).
+- This project's pipeline (`launch/robotwin_eval.sh`, `.venv-robotwin`, PROJECT.md):
+  - Checked on 2026-10-08 with the released FLUX.2-4B: `beat_block_hammer`, clean, 2 episodes on one `nnmc72` H100. Both succeeded.
+  - The checkpoint loaded with 0 missing and 0 unexpected keys. Seeds were 4,300,000 and 4,300,001.
+  - The worker config had seed 42, `instruction_type: unseen`, 10 denoising steps, horizon 16 and replan 16.
+  - Run time: 2 min 14 s including model loading.
 
 ## Storage
 

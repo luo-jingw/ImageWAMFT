@@ -307,7 +307,7 @@ Loss curves, validation metrics, step rate, no restarts or NaN; final step ≈ 6
 
 ## Phase 6
 
-Phase Status: pending
+Phase Status: active
 
 Round: 5
 

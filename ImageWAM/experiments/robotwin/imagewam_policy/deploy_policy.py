@@ -5,6 +5,7 @@ import sys
 import time
 import inspect
 from collections import deque
+from multiprocessing.connection import Client
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -218,6 +219,7 @@ class WorldActionRobotWinPolicy:
         num_video_frames: int,
         robotwin_camera_layout: str,
         apply_action_transform_backward: bool = False,
+        qwen_text_server: Optional[str] = None,
     ) -> None:
         model_cfg_copy = OmegaConf.create(OmegaConf.to_container(model_cfg, resolve=True))
         model_cfg_copy.load_text_encoder = True
@@ -244,6 +246,12 @@ class WorldActionRobotWinPolicy:
         self._num_video_frames = int(num_video_frames)
         self.robotwin_camera_layout = str(robotwin_camera_layout)
         self.apply_action_transform_backward = bool(apply_action_transform_backward)
+        # The Qwen-Image-2.1 stack has no text encoder: its features come from
+        # scripts/qwenimage21/qwen_text_server.py ("host:port"), memoized per prompt.
+        self.qwen_text_server = None if _is_none_like(qwen_text_server) else str(qwen_text_server)
+        self._qwen_text_features: Dict[str, tuple[torch.Tensor, torch.Tensor]] = {}
+        if getattr(self.model, "stack", None) == "qwenimage21" and self.qwen_text_server is None:
+            raise ValueError("The Qwen-Image-2.1 stack needs `qwen_text_server` (host:port) for its text features.")
 
         self.pending_actions: deque[np.ndarray] = deque()
         self.episode_count = 0
@@ -327,8 +335,14 @@ class WorldActionRobotWinPolicy:
         proprio = self._normalize_state(state_vector)
 
         prompt = DEFAULT_PROMPT.format(task=instruction)
+        context = context_mask = None
+        if getattr(self.model, "stack", None) == "qwenimage21":
+            context, context_mask = self._qwen_features(prompt)
+            prompt = None
         infer_kwargs = {
             "prompt": prompt,
+            "context": context,
+            "context_mask": context_mask,
             "input_image": image_tensor,
             "action_horizon": self.action_horizon,
             "proprio": proprio,
@@ -358,6 +372,20 @@ class WorldActionRobotWinPolicy:
         action_tensor = pred["action"]  # [T, D]
         action_chunk = self._denormalize_action(action_tensor)[0]  # [T, D]
         return action_chunk
+
+    def _qwen_features(self, prompt: str) -> tuple[torch.Tensor, torch.Tensor]:
+        if prompt not in self._qwen_text_features:
+            host, port = self.qwen_text_server.rsplit(":", 1)
+            with Client((host, int(port)), authkey=b"imagewamft-qwen-text") as conn:
+                conn.send(prompt)
+                reply = conn.recv()
+            if "error" in reply:
+                raise RuntimeError(f"Qwen-Image-2.1 text server failed for {prompt!r}: {reply['error']}")
+            payload = torch.load(reply["path"], map_location="cpu")
+            self._qwen_text_features[prompt] = (payload["text_hidden_states"], payload["text_attention_mask"].bool())
+            logger.info("Qwen-Image-2.1 text features: %s (%d tokens) for %r", reply["path"],
+                        int(payload["text_attention_mask"].sum()), prompt)
+        return self._qwen_text_features[prompt]
 
     def _fill_action_queue(self, observation: Dict[str, Any], instruction: str) -> None:
         action_chunk = self._infer_action_chunk(observation=observation, instruction=instruction)
@@ -624,6 +652,7 @@ def get_model(usr_args: Dict[str, Any]):
         num_video_frames=(int(cfg.data.train.num_frames) - 1) // int(cfg.data.train.action_video_freq_ratio) + 1,
         robotwin_camera_layout=robotwin_camera_layout,
         apply_action_transform_backward=apply_action_transform_backward,
+        qwen_text_server=usr_args.get("qwen_text_server", cfg.EVALUATION.get("qwen_text_server")),
     )
     return policy
 

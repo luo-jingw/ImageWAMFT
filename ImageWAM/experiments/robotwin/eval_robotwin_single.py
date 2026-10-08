@@ -224,6 +224,7 @@ def main(cfg: DictConfig):
     _append_override(overrides, "tiled", cfg.EVALUATION.tiled)
     _append_override(overrides, "timing_enabled", cfg.EVALUATION.timing_enabled)
     _append_override(overrides, "robotwin_camera_layout", cfg.EVALUATION.robotwin_camera_layout)
+    _append_override(overrides, "qwen_text_server", cfg.EVALUATION.get("qwen_text_server"))
     _append_override(
         overrides,
         "apply_action_transform_backward",
