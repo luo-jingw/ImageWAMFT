@@ -295,27 +295,38 @@ The first Qwen-Image-2.1 G1 smoke run (`nnmc72` GPUs 4,5; ZeRO-2; bf16; 4 per GP
 
 Status: Open
 
-Area: shared nodes (RoboTwin text cache)
+Area: shared nodes (`nnmc72` GPU processes)
 
 ## Observation
 
-All 8 Qwen-Image-2.1 cache processes on `nnmc72` (GPUs 0–3, `plan.md` Phase 3) exited at 12:37:05 PDT on 2026-10-08. The launcher's `wait` returned and the job printed `finished`, but each shard had written only about 21,400 of its 115,129 prompts.
+Since at least 2026-10-08, every process of ours that holds a GPU on `nnmc72` receives SIGTERM at :07 and :37 of each hour. This hit the Qwen-Image-2.1 RoboTwin cache twice (`plan.md` Phase 3).
+
+## Impact
+
+- `nnmc72` GPUs cannot run anything longer than about 30 minutes: training, the text cache, or RoboTwin evaluation (`plan.md` D6).
+- The G1 runs on `nnmc72` (2026-10-01 to 10-05) were not affected, so this behavior is newer.
 
 ## Evidence
 
-- No shard log has an error or traceback; each ends with an ordinary `wrote …` line. The logs are kept in `checkpoints/robotwin_logs/qwen_cache_run1/`.
-- The 8 processes stopped within the same second. Free memory on `nnmc72` was 724 GB afterwards. Nothing of this project ran on `nnmc72` at that time besides the cache.
-- The FLUX.2-9B cache on `nnmc71` was not affected.
+- All 8 cache processes exited with code 143 (SIGTERM), first at 12:37:05 and then at 13:07:05 PDT, each time partway through their shards. Logs: `checkpoints/robotwin_logs/qwen_cache_run1/` and `cache_qwen_shard*.log`.
+- The `nnmc72` sshd log shows `user1` sessions from `10.145.87.57` (`nnmc57`) about 6 times per minute since at least 10:00. At :07 and :37 the count doubles to 14 per minute, which matches the kill times.
+  - `nnmc57` runs other people's jobs under the shared `user1` account. This project does not use it, and it was not inspected.
+- Probe at the 13:37 sweep:
+  - Probes started at 13:09: a CUDA process on GPU 0, one on GPU 4, and a CPU-only Python process. All had `ImageWAMFT` in their command lines.
+  - Both GPU processes received SIGTERM at 13:37:03. The CPU process was not touched.
+- Over the same sweeps, this project's jobs on `nnmc71` (FLUX.2-9B cache) and `nnmc73` (Qwen-Image-2.1 cache) were not touched. The `nnmc71` sshd log visible to `user1` shows no `nnmc57` sessions.
 
 ## Hypotheses
 
-- An external signal, since all processes stopped together and Python printed nothing. Other people's jobs run under the same `user1` account (PROJECT.md), so another session could have killed them.
-- An OOM kill is less likely, given the free memory.
+Another user's automation on `nnmc57` terminates GPU processes on `nnmc72` every 30 minutes, possibly to reserve the node.
 
 ## Next Experiment
 
-The restarted job (12:49 PDT) writes each shard's exit code to its log: 137 means SIGKILL, 143 means SIGTERM. Cache writes are atomic (`.tmp`, then `os.replace`), so finished files are valid and the restart skips them.
+None from this project. Whoever owns the `nnmc57` automation has to exclude this project's processes, or the user decides that `nnmc72` is no longer available.
 
 ## Resolution
 
 Open.
+- Workaround for the cache: it moved to `nnmc73` (`checkpoints/robotwin_logs/cache_qwen_nnmc73.sh`, `.venv-qwenimage-nnmc73`).
+- Cache writes are atomic, so the files written on `nnmc72` are valid.
+- RoboTwin evaluation (`plan.md` D6) needs another GPU host or this issue resolved.

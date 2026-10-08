@@ -35,7 +35,7 @@ Neither FLUX.2-9B nor Qwen-Image-2.1 can be trained on RoboTwin with the release
 1. **FLUX.2-klein-base-9B RoboTwin model.** Settings match the released 4B model's `config.yaml` except for backbone-bound parts and the per-GPU split of the global batch:
    - Data: all 27,500 episodes; non-idle filter; 1% validation split; per-frame task strings with `DEFAULT_PROMPT`; Qwen3-8B text features in 128 slots.
    - Global batch 384 = 8 H100 × 4 per GPU × gradient accumulation 12. 5 epochs, about 69.9k optimizer steps.
-   - bf16; AdamW (0.9, 0.95); lr 1e-4; weight decay 0.01; 5% warmup then cosine; gradient clipping 1.0 (D9); DeepSpeed ZeRO-2.
+   - bf16; AdamW (0.9, 0.95); lr 1e-4; weight decay 0.01; 5% warmup then cosine; gradient clipping 1.0 (D9); DeepSpeed ZeRO-1 (D10).
    - Video augmentation, camera layout, horizons, normalization statistics and validation cadence as released.
 2. **Qwen-Image-2.1 RoboTwin model:** the same data, split, recipe, length and global batch of 384 on 4 B300 on `nnmc73`. Only the backbone-bound components differ, as in the G1 work: editing DiT, text features (Qwen3-VL, 128 slots), VAE, and action-DiT depth.
 3. **RoboTwin evaluation** of the released 4B model and both trained models under the paper protocol:
@@ -70,7 +70,7 @@ Constraint check against this goal:
 - **D1 Recipe source.** The released 4B `config.yaml` and `model.pt` (step 69,900) are the reference. They take precedence over the paper text (30k steps) and over the repository's FLUX.2-9B RoboTwin config (global batch 64).
 - **D2 Global batch 384** for both models. The per-GPU micro-batch and accumulation are set per hardware so that micro × accumulation × GPUs = 384, and epochs stay at 5.
   - FLUX.2-9B: 4 × 12 × 8.
-  - Qwen-Image-2.1: the largest micro-batch that fits a B300, with accumulation making 96 per GPU. Fixed in Phase 4.
+  - Qwen-Image-2.1: the largest micro-batch that fits a B300, with accumulation making 96 per GPU. Phase 4 fixed it at 96 × 1 × 4 (peak 92.8 GB of 275 GB).
 - **D3 Text cache format unchanged:** padded 128 slots, one file per prompt, as the training loader reads it.
 - **D4 Cache placement:**
   - Qwen-Image-2.1 cache on `nnmc73` local disk.
@@ -79,6 +79,13 @@ Constraint check against this goal:
 - **D6 Evaluation environment:** `.venv-robotwin` built separately; the evaluation reads the policy from the training env through the repository's evaluation manager. Evaluation GPUs are idle `nnmc72` GPUs (at most 4).
 - **D7 Logging:** wandb offline under the run directory, plus the launcher log.
 - **D8 Data-loader workers:** the released 24 per GPU, lowered if CPU or RAM saturates. This does not change sampling or math.
+- **D10 FLUX.2-9B uses DeepSpeed ZeRO-1** (Phase 4 measurement, 2026-10-08):
+  - ZeRO-1 is the upstream launcher's default (`ZERO_STAGE:-1`), so the released 4B was trained with it.
+  - ZeRO-2 reduce-scatters the gradients at each of the 12 micro-steps. ZeRO-1 reduces them once per optimizer step.
+  - On `nnmc71`, NVLink joins only GPU pairs, and GPUs 0–3 reach 4–7 across sockets.
+  - The optimizer math is the same in both stages: AdamW on fp32 partitions, clipping on the global norm.
+  - `launch/robotwin_flux2_9b_train.sh ZERO=1` uses `scripts/ds_configs/ds_zero1_config.json`, which sets `gradient_clipping` 1.0.
+  - Qwen-Image-2.1 stays on ZeRO-2. It accumulates once per step, so ZeRO-1 would save no communication.
 - **D9 Gradient clipping 1.0** (user decision, 2026-10-08): follow the paper (Table 8) with `GRAD_CLIP=1.0` (`scripts/ds_configs/ds_zero2_config.json`). The released 4B was most likely trained without effective clipping (upstream DeepSpeed configs set none), so this is the one recipe difference to the released model, stated with every comparison.
 
 ## Responsibilities
@@ -102,7 +109,7 @@ Constraint check against this goal:
 
 ## Interfaces
 
-- **`launch/robotwin_flux2_9b_train.sh`** (env: `GPUS`, optional `SMOKE_STEPS`). Runs `ImageWAM/scripts/train_zero2.sh 8 task=robotwin_flux2_klein_9b_base_b384_imagewam ...` with the data, cache, FLUX.2 weight and action-init overrides.
+- **`launch/robotwin_flux2_9b_train.sh`** (env: `GPUS`, `GRAD_CLIP`, `ZERO` (1 or 2), optional `SMOKE_STEPS`, `MODE=cache`). Runs `ImageWAM/scripts/train_zero{1,2}.sh 8 task=robotwin_flux2_klein_9b_base_b384_imagewam ...` with the data, cache, FLUX.2 weight and action-init overrides.
 - **`launch/robotwin_qwenimage21_train.sh`** (env: `GPUS`, `MICRO_BATCH`, `GRAD_ACCUM`, optional `SMOKE_STEPS`). Runs on `nnmc73` with `.venv-nnmc73`, task `robotwin_qwenimage21_imagewam`.
 - **Cache commands:**
   - FLUX.2-9B: `precompute_flux2_qwen3_embeds.py` with the FLUX.2-9B RoboTwin task overrides and `qwen_text_cache_dir` per D4.
@@ -140,7 +147,8 @@ Caches written once (the scripts skip existing files); runs append checkpoints; 
 | Qwen-Image-2.1 task config | `ImageWAM/configs/task/robotwin_qwenimage21_imagewam.yaml` (data `robotwin_omnigen2`, model `imagewam_qwenimage21`) |
 | Launchers | `launch/robotwin_flux2_9b_train.sh`, `launch/robotwin_qwenimage21_train.sh`, `launch/robotwin_eval.sh` |
 | Qwen-Image-2.1 prompt shards | `launch/robotwin_qwen_prompts.py` (writes prompt JSON shards from `meta/tasks.jsonl` with `DEFAULT_PROMPT`) |
-| Evaluation environment | `PROJECT.md` (recipe), `.venv-robotwin/` (ignored) |
+| Evaluation environment | `node_env/build_venv_robotwin.sh`, `PROJECT.md` (recipe), `.venv-robotwin/` and RoboTwin assets (ignored) |
+| Qwen-Image-2.1 evaluation text features | `ImageWAM/scripts/qwenimage21/qwen_text_server.py` (`.venv-qwenimage`, Qwen3-VL loaded once); `ImageWAM/experiments/robotwin/imagewam_policy/deploy_policy.py` (`qwen_text_server` client for the `qwenimage21` stack); `ImageWAM/experiments/robotwin/eval_robotwin_single.py` and `ImageWAM/configs/sim_robotwin.yaml` (`EVALUATION.qwen_text_server`) |
 | Facts and results | `docs/robotwin_training_setup.md`, `docs/robotwin_training_results.md`, `PROJECT.md` |
 
 # Implementation
@@ -216,7 +224,7 @@ Result (2026-10-08):
 
 ## Phase 3
 
-Phase Status: active
+Phase Status: completed
 
 Round: 3
 
@@ -245,9 +253,17 @@ Phase 2 (placement).
 - File counts equal 921,032 per cache.
 - For sampled prompts, cached features equal a fresh encoding and the masks have the expected lengths.
 
+Result (2026-10-08, details in `docs/robotwin_training_setup.md` → Storage):
+- FLUX.2-9B cache (`nnmc71` 8 GPUs, written to `nnmc73`):
+  - 921,032 files, 0 missing, 0 extra.
+  - 24 sampled entries against a batch-of-one fresh encoding: identical masks, relative difference 0.07–0.09% (bf16 batch-shape noise).
+- Qwen-Image-2.1 cache: 921,032 files, 0 missing, 0 extra.
+  - The `nnmc72` run was killed every 30 minutes (ISSUE-010); 315,231 prompts came from `nnmc72` H100s and the rest from `nnmc73` B300s.
+  - B300-written entries equal a fresh encoding bit for bit. H100-written entries differ by 2.1–2.4% (cross-hardware).
+
 ## Phase 4
 
-Phase Status: pending
+Phase Status: completed
 
 Round: 4
 
@@ -275,9 +291,25 @@ Phase 3.
 
 Finite loss, step time, peak memory, loader throughput, projected wall clock, resolved-config diff.
 
+Result (2026-10-08):
+- Action-DiT inits: `ImageWAM/checkpoints/action_dit_{flux2_9b,qwenimage21}_robotwin_init.pt`. They equal the G1 inits tensor for tensor; the layers that depend on the action dimension are created at model build.
+- Smoke tests, 30 steps each, `GRAD_CLIP=1.0`. Logs are in `checkpoints/robotwin_logs/` and on `nnmc73` in `checkpoints/qwen_smoke_mb96.log`.
+
+| Model | Hardware | Micro × accumulation × GPUs | ZeRO | Loss at steps 10 / 20 / 30 | s per optimizer step | Peak GPU memory | Full run (69,900 steps) |
+|---|---|---|---|---|---|---|---|
+| Qwen-Image-2.1 | `nnmc73` 4 × B300 | 96 × 1 × 4 | 2 | 1.72 / 0.98 / 0.91 | 6.4–6.5 | 92.8 GB | about 5.2 days |
+| FLUX.2-9B | `nnmc71` 8 × H100 NVL | 4 × 12 × 8 | 2 | 2.04 / 1.06 / 0.69 | 24.5–25.1 | 67.3 GB | about 20 days |
+| FLUX.2-9B | `nnmc71` 8 × H100 NVL | 4 × 12 × 8 | 1 | 2.13 / 1.14 / 0.76 | 9.7–9.9 | 76.6 GB | about 7.9 days |
+
+- The data loader is not a bottleneck: data wait was 0.001–0.007 s per micro-step.
+- Validation at step 30 and the final save succeeded in every run.
+- Resolved-config diff of the Qwen-Image-2.1 run against the released config: only module names, paths, the text-cache format, backbone-bound model keys, the batch split (96 × 1 against 12 × 4, both 384), project keys, wandb and the smoke-only keys differ.
+- The full runs use Qwen-Image-2.1 96 × 1 × 4 with ZeRO-2 (D2) and FLUX.2-9B with ZeRO-1 (D10).
+- 9B weight files are 54 GB each (`lora_merged` format: 18.76 B stored bf16 values, with the video expert under two names).
+
 ## Phase 5
 
-Phase Status: pending
+Phase Status: active
 
 Round: 5
 
@@ -307,7 +339,7 @@ Loss curves, validation metrics, step rate, no restarts or NaN; final step ≈ 6
 
 ## Phase 6
 
-Phase Status: active
+Phase Status: blocked
 
 Round: 5
 
@@ -317,7 +349,7 @@ Round: 5
 
 ### Files
 
-`launch/robotwin_eval.sh`, `PROJECT.md`, `docs/robotwin_training_results.md` (evaluation part).
+`node_env/build_venv_robotwin.sh`, `launch/robotwin_eval.sh`, the Qwen-Image-2.1 evaluation text-feature files (Code Mapping), the RoboTwin policy symlink, `PROJECT.md`, `docs/robotwin_training_results.md` (evaluation part).
 
 ### Structures
 
@@ -334,6 +366,11 @@ Phase 2 (data paths only).
 ### Observation
 
 Per-task success against Table 12; episode time; GPU use.
+
+Progress (2026-10-08):
+- `.venv-robotwin`, the assets and `launch/robotwin_eval.sh` are done. A released FLUX.2-4B check (`beat_block_hammer`, clean, 2 episodes) succeeded on both episodes.
+- The Qwen-Image-2.1 evaluation text path exists (Code Mapping); its client was tested against the server on CPU.
+- Blocked: since 2026-10-08, GPU processes on `nnmc72`, the D6 evaluation host, are killed every 30 minutes (ISSUE-010). The full evaluation needs about 9 h. It can resume once `nnmc72` is usable or the user names another GPU host.
 
 ## Phase 7
 

@@ -9,6 +9,8 @@
 # GRAD_CLIP (required): `none` uses the upstream DeepSpeed config without gradient clipping, the configuration the
 # released model was trained with; `1.0` uses the project config with gradient_clipping 1.0 (paper Table 8).
 # MODE=cache builds the text cache for all task strings on the given GPUs and exits.
+# ZERO (default 2): DeepSpeed ZeRO stage, 1 or 2. ZeRO-1 (the upstream launcher's default) reduces gradients once per
+# optimizer step instead of at every micro-step; it requires GRAD_CLIP=1.0 (scripts/ds_configs/ds_zero1_config.json).
 # SMOKE_STEPS=N stops after N optimizer steps and writes to checkpoints/<run>_smoke.
 # Resume after an interruption by appending resume=<OUT>/checkpoints/state/step_XXXXXX.
 set -euo pipefail
@@ -67,6 +69,12 @@ case "${GRAD_CLIP}" in
   1.0) export ACCELERATE_CONFIG_FILE=scripts/accelerate_configs/accelerate_zero2_ds.yaml ;;
   *) echo "GRAD_CLIP must be none or 1.0" >&2; exit 2 ;;
 esac
+ZERO="${ZERO:-2}"
+case "${ZERO}" in
+  2) ;;
+  1) if [ "${GRAD_CLIP}" != 1.0 ]; then echo "ZERO=1 has only the gradient_clipping 1.0 config" >&2; exit 2; fi ;;
+  *) echo "ZERO must be 1 or 2" >&2; exit 2 ;;
+esac
 if (( 384 % (4 * NUM_GPUS) != 0 )); then
   echo "Global batch 384 is not divisible by 4 x ${NUM_GPUS} GPUs" >&2
   exit 2
@@ -80,10 +88,10 @@ if [ -n "${SMOKE_STEPS:-}" ]; then
 fi
 mkdir -p "${OUT}"
 cp -n "${NORM_STATS}" "${OUT}/dataset_stats.json"
-echo "[launch] $(date '+%F %T') host=$(hostname) gpus=${GPUS} accumulation=${ACCUM} grad_clip=${GRAD_CLIP} out=${OUT} args=$*" \
+echo "[launch] $(date '+%F %T') host=$(hostname) gpus=${GPUS} accumulation=${ACCUM} grad_clip=${GRAD_CLIP} zero=${ZERO} out=${OUT} args=$*" \
   | tee -a "${OUT}/train.log"
 CUDA_VISIBLE_DEVICES="${GPUS}" GPU_PER_NODE="${NUM_GPUS}" TASK_TYPE=robotwin FLUX2_VARIANT=9b \
-  ROBOTWIN_TASK_NAME="${RUN_NAME}" RUN_ID="${RUN_NAME}" ZERO_STAGE=2 \
+  ROBOTWIN_TASK_NAME="${RUN_NAME}" RUN_ID="${RUN_NAME}" ZERO_STAGE="${ZERO}" \
   bash scripts/flux2/run_train_flux2_klein_imagewam.sh \
   "output_dir=${OUT}" \
   "gradient_accumulation_steps=${ACCUM}" \

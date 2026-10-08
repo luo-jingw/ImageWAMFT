@@ -84,6 +84,10 @@ FLUX.2-klein-base-4B, the backbone the paper reports for its real-world experime
   - Assets: `TianxingChen/RoboTwin2.0` (`background_texture`, `embodiments`, `objects`; 16 GB) are unpacked in the git-ignored `ImageWAM/third_party/RoboTwin/assets/`. `script/update_embodiment_config_path.py` wrote the absolute `/home/user1/workspace/jingwu/ImageWAMFT/...` asset paths into the embodiment configs; they resolve on `nnmc72` through its symlink.
   - Vulkan: `vulkaninfo` lists the H100 GPUs on `nnmc71` and `nnmc72`.
   - The tracked symlink `ImageWAM/third_party/RoboTwin/policy/imagewam_policy` pointed to the authors' cluster path; it now points to `../../../experiments/robotwin/imagewam_policy`.
+- Qwen3-VL text features on B300: `.venv-qwenimage-nnmc73` (`nnmc73`).
+  - Built by `node_env/build_venv_qwenimage_nnmc73.sh` with the `nnmc73` uv CPython 3.11.15.
+  - Packages: the `.venv-qwenimage` freeze, except torch 2.9.1 and torchvision 0.24.1 for CUDA 13.0, the `.venv-nnmc73` torch build. The `.venv-qwenimage` torch (2.7.1+cu118) does not support compute capability 10.3. Its non-torch packages equal `.venv-qwenimage`.
+  - For the same prompt, its features differ from `.venv-qwenimage` on an H100 by 2.2–2.6% relative L2 (cosine ≥ 0.9997, identical masks; 12 RoboTwin prompts, 2026-10-08).
 - Qwen-Image-2.1 reference environment: `.venv-qwenimage` on `nnmc71`. It has torch 2.7.1+cu118, diffusers from git commit `578c9b2c6636ab2424a0e56186268b83623656b2` (0.41.0.dev0), transformers 5.18.0 and huggingface-hub 1.33.0, installed with `--link-mode copy`. It is used offline only, for reference fixtures and Qwen3-VL text features.
 - Running `.venv` from another node (paths written at build time point to `/home/user1/workspace/jingwu/ImageWAMFT`):
   - The interpreter is the uv-managed CPython 3.11.13 at `/home/user1/.local/share/uv/python/cpython-3.11.13-linux-x86_64-gnu/bin/python3.11`. It exists at the same path on `nnmc72`.

@@ -54,6 +54,7 @@ From the released `config.yaml` and `model.pt`:
 | Optimizer | AdamW, betas (0.9, 0.95), lr 1e-4, weight decay 0.01 |
 | Schedule | cosine; warmup 5% of total steps (`Trainer` default for `warmup_steps: null`) |
 | Precision, clipping | bf16; config `max_grad_norm` 1.0, but not applied (below) |
+| DeepSpeed | ZeRO-1: the default of the upstream launchers (`ZERO_STAGE:-1` in `scripts/flux2/run_train_flux2_klein_imagewam.sh` and `train_flux2_klein_imagewam.sh` at import) |
 | Video | 17 frames (16 actions), reference + 1 future frame, `compact_288x256` layout |
 | Video augmentation | p 0.5; color jitter 0.2/0.2/0.2/0.03, gamma 0.9–1.1, noise 0.01, crop scale 0.95–1.0, rotation 5° |
 | Text | Qwen3 features (3 layers concatenated), 128 slots |
@@ -103,3 +104,15 @@ From the released `config.yaml` and `model.pt`:
 | Qwen-Image-2.1 | Qwen3-VL, 4096, 128 slots, bf16 | 1.0 MB | 0.97 TB |
 
 Free disk on 2026-10-08: `nnmc71` 2.7 TB, `nnmc72` 5.1 TB, `nnmc73` 22 TB.
+
+Qwen-Image-2.1 cache as built (2026-10-08, `nnmc73:/home/user1/workspace/jingwu/ImageWAMFT_nnmc73/text_cache/qwenimage21_text_cache`):
+- 921,032 files. Each is the training lookup name of one `DEFAULT_PROMPT`-wrapped task string; there are no extra files and no temporary files.
+- Encoders:
+  - The first 315,231 prompts were encoded on `nnmc72` H100s (`.venv-qwenimage`, torch 2.7.1+cu118). The run was stopped by ISSUE-010.
+  - The remaining 605,801 were encoded on `nnmc73` B300s (`.venv-qwenimage-nnmc73`, torch 2.9.1+cu130).
+  - Both use `precompute_qwenimage21_text_embeds.py`; file modification times tell the two apart.
+- Check of 24 random prompts against a fresh `nnmc73` encoding:
+  - Masks are identical.
+  - B300-written entries are bit-identical.
+  - H100-written entries differ by 2.1–2.4% relative L2 (cosine ≥ 0.9997), the hardware and torch-version difference measured in PROJECT.md.
+  - Each prompt's features stay fixed during training.
