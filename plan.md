@@ -35,7 +35,7 @@ Neither FLUX.2-9B nor Qwen-Image-2.1 can be trained on RoboTwin with the release
 1. **FLUX.2-klein-base-9B RoboTwin model.** Settings match the released 4B model's `config.yaml` except for backbone-bound parts and the per-GPU split of the global batch:
    - Data: all 27,500 episodes; non-idle filter; 1% validation split; per-frame task strings with `DEFAULT_PROMPT`; Qwen3-8B text features in 128 slots.
    - Global batch 384 = 8 H100 × 4 per GPU × gradient accumulation 12. 5 epochs, about 69.9k optimizer steps.
-   - bf16; AdamW (0.9, 0.95); lr 1e-4; weight decay 0.01; 5% warmup then cosine; clipping 1.0; DeepSpeed ZeRO-2.
+   - bf16; AdamW (0.9, 0.95); lr 1e-4; weight decay 0.01; 5% warmup then cosine; gradient clipping 1.0 (D9); DeepSpeed ZeRO-2.
    - Video augmentation, camera layout, horizons, normalization statistics and validation cadence as released.
 2. **Qwen-Image-2.1 RoboTwin model:** the same data, split, recipe, length and global batch of 384 on 4 B300 on `nnmc73`. Only the backbone-bound components differ, as in the G1 work: editing DiT, text features (Qwen3-VL, 128 slots), VAE, and action-DiT depth.
 3. **RoboTwin evaluation** of the released 4B model and both trained models under the paper protocol:
@@ -79,6 +79,7 @@ Constraint check against this goal:
 - **D6 Evaluation environment:** `.venv-robotwin` built separately; the evaluation reads the policy from the training env through the repository's evaluation manager. Evaluation GPUs are idle `nnmc72` GPUs (at most 4).
 - **D7 Logging:** wandb offline under the run directory, plus the launcher log.
 - **D8 Data-loader workers:** the released 24 per GPU, lowered if CPU or RAM saturates. This does not change sampling or math.
+- **D9 Gradient clipping 1.0** (user decision, 2026-10-08): follow the paper (Table 8) with `GRAD_CLIP=1.0` (`scripts/ds_configs/ds_zero2_config.json`). The released 4B was most likely trained without effective clipping (upstream DeepSpeed configs set none), so this is the one recipe difference to the released model, stated with every comparison.
 
 ## Responsibilities
 
@@ -211,7 +212,7 @@ Result (2026-10-08):
 - The Qwen-Image-2.1 task differs in the text-cache format, the batch split, `save_every` and offline wandb; its model section is the Qwen-Image-2.1 stack.
 - Copy on `nnmc73` (`/home/user1/workspace/jingwu/ImageWAMFT_nnmc73/dataset/robotwin2.0/`): 27,500 parquet and 82,500 video files, 79,938,101,241 bytes, meta and non-idle checksums equal.
 - NFS reads of 3.15 MB files from `nnmc71` to `nnmc73` disk: 228 MB/s with 8 threads and 962 MB/s with 32. FLUX.2-9B training needs about 110 MB/s, so D4 places its cache on `nnmc73`.
-- Found during configuration: upstream DeepSpeed configs set no `gradient_clipping`, and under DeepSpeed `accelerator.clip_grad_norm_` only reports the norm. The released model was therefore most likely trained without clipping, while the paper (Table 8) states 1.0 and this project's configs enable 1.0 (commit `34bf80d`). Both launchers require `GRAD_CLIP=none|1.0`; `none` uses `scripts/ds_configs/ds_zero2_upstream_config.json`, the upstream file. The choice is the user's.
+- Found during configuration: upstream DeepSpeed configs set no `gradient_clipping`, and under DeepSpeed `accelerator.clip_grad_norm_` only reports the norm. The released model was therefore most likely trained without clipping, while the paper (Table 8) states 1.0 and this project's configs enable 1.0 (commit `34bf80d`). Both launchers require `GRAD_CLIP=none|1.0`; `none` uses `scripts/ds_configs/ds_zero2_upstream_config.json`, the upstream file. The user chose 1.0 (D9).
 
 ## Phase 3
 

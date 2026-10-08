@@ -53,13 +53,18 @@ From the released `config.yaml` and `model.pt`:
 | Epochs | 5 (69,900 optimizer steps) |
 | Optimizer | AdamW, betas (0.9, 0.95), lr 1e-4, weight decay 0.01 |
 | Schedule | cosine; warmup 5% of total steps (`Trainer` default for `warmup_steps: null`) |
-| Precision, clipping | bf16, max grad norm 1.0 |
+| Precision, clipping | bf16; config `max_grad_norm` 1.0, but not applied (below) |
 | Video | 17 frames (16 actions), reference + 1 future frame, `compact_288x256` layout |
 | Video augmentation | p 0.5; color jitter 0.2/0.2/0.2/0.03, gamma 0.9–1.1, noise 0.01, crop scale 0.95–1.0, rotation 5° |
 | Text | Qwen3 features (3 layers concatenated), 128 slots |
 | Proprio | 14-dim, packed after the text |
 | Validation split | 1% of episodes |
 
+- Gradient clipping:
+  - Under DeepSpeed, `Trainer` calls `accelerator.clip_grad_norm_`. In accelerate 1.12.0 that returns the norm and leaves clipping to the DeepSpeed config.
+  - The upstream ImageWAM and FastWAM DeepSpeed configs (`scripts/ds_configs/ds_zero{1,2}_config.json`) set no `gradient_clipping`. The released model was therefore most likely trained without clipping, although paper Table 8 lists clipping 1.0.
+  - This project's configs set `gradient_clipping` 1.0 (commit `34bf80d`); the upstream file is kept as `ds_zero2_upstream_config.json`.
+  - In this project's G1 runs, the pre-clip global norm had a median of 1.3–2.3 and exceeded 1.0 in 62–83% of steps, so the two settings train differently.
 - Samples per epoch: every kept frame is one sample (`BaseLeRobotDataset.__len__`, `sample_index_stride` 1). That is about 5.37 M training samples, or about 69.9k steps at a global batch of 384.
 - The paper's main text says RoboTwin models are trained for 30k steps. The released model's 69,900 steps contradict this, and the released model is what is matched.
 - Paper Table 10: FLUX.2 4B on RoboTwin trained for 5 days, effective per-GPU batch 48.
