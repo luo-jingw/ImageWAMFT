@@ -1,0 +1,56 @@
+# @package _global_
+# Qwen-Image-2.1 ImageWAM on RoboTwin 2.0 with the released FLUX.2-4B RoboTwin recipe
+# (docs/robotwin_training_setup.md): global batch 384, 5 epochs. Same data, split, recipe and length as
+# robotwin_flux2_klein_9b_base_b384_imagewam; only the backbone-bound parts differ (editing DiT, Qwen3-VL text
+# features, VAE, action-DiT depth). The per-GPU split (batch_size x gradient_accumulation_steps x GPUs = 384) and the
+# paths are set by launch/robotwin_qwenimage21_train.sh.
+
+defaults:
+  - override /data: robotwin_omnigen2
+  - override /model: imagewam_qwenimage21
+  - _self_
+
+data:
+  train:
+    require_text_cache: false
+    qwen_text_cache_dir: ???
+    qwen_context_len: 128
+    qwen_text_cache_format: qwen3vl_qwenimage21
+    nonidle_filter_path: ???
+  val:
+    require_text_cache: false
+    qwen_text_cache_dir: ???
+    qwen_context_len: 128
+    qwen_text_cache_format: qwen3vl_qwenimage21
+    nonidle_filter_path: null  # as in the released config
+
+batch_size: ???
+num_workers: 24
+prefetch_factor: 2
+persistent_workers: true
+keep_latest_state_only: true
+
+lr_scheduler_type: "cosine"
+learning_rate: 1e-4
+num_epochs: 5
+max_steps: null
+log_every: 10
+save_every: 5000
+eval_every: 500
+
+gradient_accumulation_steps: ???
+weight_decay: 1e-2
+max_grad_norm: 1.0
+mixed_precision: "bf16"
+resume: null
+
+model:
+  proprio_dim: ${data.train.processor.proprio_output_dim}
+  qwen_context_len: 128
+
+wandb:
+  enabled: true
+  workspace: null
+  project: imagewam
+  name: robotwin_qwenimage21_imagewam
+  mode: offline

@@ -1,0 +1,55 @@
+# @package _global_
+# FLUX.2-klein-base-9B ImageWAM on RoboTwin 2.0 with the released FLUX.2-4B RoboTwin recipe
+# (docs/robotwin_training_setup.md): global batch 384 = 8 GPUs x 4 per GPU x gradient accumulation 12, 5 epochs
+# (about 69.9k optimizer steps). The repository's robotwin_flux2_klein_9b_base_imagewam uses a global batch of 64.
+# Paths (dataset, non-idle ranges, text cache, weights, action init) are set by launch/robotwin_flux2_9b_train.sh.
+
+defaults:
+  - override /data: robotwin_omnigen2
+  - override /model: imagewam_flux2_klein_9b_base
+  - _self_
+
+data:
+  train:
+    require_text_cache: false
+    qwen_text_cache_dir: ???
+    qwen_context_len: 128
+    qwen_text_cache_format: qwen3_flux2
+    nonidle_filter_path: ???
+  val:
+    require_text_cache: false
+    qwen_text_cache_dir: ???
+    qwen_context_len: 128
+    qwen_text_cache_format: qwen3_flux2
+    nonidle_filter_path: null  # as in the released config
+
+batch_size: 4
+num_workers: 24
+prefetch_factor: 2
+persistent_workers: true
+keep_latest_state_only: true
+
+lr_scheduler_type: "cosine"
+learning_rate: 1e-4
+num_epochs: 5
+max_steps: null
+log_every: 10
+save_every: 5000
+eval_every: 500
+
+gradient_accumulation_steps: 12
+weight_decay: 1e-2
+max_grad_norm: 1.0
+mixed_precision: "bf16"
+resume: null
+
+model:
+  proprio_dim: ${data.train.processor.proprio_output_dim}
+  qwen_context_len: 128
+
+wandb:
+  enabled: true
+  workspace: null
+  project: imagewam
+  name: robotwin_flux2_klein_9b_base_b384_imagewam
+  mode: offline

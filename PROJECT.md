@@ -37,7 +37,7 @@ FLUX.2-klein-base-4B, the backbone the paper reports for its real-world experime
   - Other nodes' `/home/user1` is their own local disk, and the project does not exist there. On other nodes, use only the `/shared/user71/...` path.
   - Access: passwordless `ssh nnmc<N>` works from `nnmc71`, and from other nodes back to `nnmc71` (checked with `nnmc72`).
   - Using another node's GPUs: `ssh nnmc<N>`, then work in `/shared/user71/workspace/jingwu/ImageWAMFT`.
-  - Allowed nodes and GPU policy: nodes `nnmc61`–`nnmc71` were granted first; idle GPUs on `nnmc71`–`nnmc75` may be used directly, at most 4 per node. GPUs with another user's process are never used. Each model trains on 2 GPUs unless its memory needs more: FLUX.2-9B needs one B300 or four H100. All nodes run jobs from other people under the same `user1` account, so a process counts as this project's only when its command line contains `ImageWAMFT`.
+  - Allowed nodes and GPU policy: nodes `nnmc61`–`nnmc71` were granted first; idle GPUs on `nnmc71`–`nnmc75` may be used directly, at most 4 per node. Exception granted by the user on 2026-10-08: the RoboTwin FLUX.2-9B run uses all 8 GPUs of `nnmc71` (`plan.md`). GPUs with another user's process are never used. Each model trains on 2 GPUs unless its memory needs more: FLUX.2-9B needs one B300 or four H100. All nodes run jobs from other people under the same `user1` account, so a process counts as this project's only when its command line contains `ImageWAMFT`.
   - `nnmc73`–`nnmc75` have 8× B300 SXM6 AC with 275,040 MiB, compute capability 10.3. `nnmc73`: driver 595.71.05 (CUDA 13.2), no CUDA toolkit in `/usr/local`, Ubuntu 24.04, uv 0.11.28. `nnmc74` and `nnmc75` lack the uv CPython 3.11.15 that `.venv-nnmc73` links to, so that environment runs on `nnmc73` only.
   - A node may need its own Python environment, because GPU models, CUDA toolkits and uv-managed interpreters differ between nodes. Each node gets its own uv environment built with the `.venv` recipe below, and rebuilding per node is acceptable.
   - Hardware of the allowed nodes (read-only survey, 2026-10-01). All have `uv` at `/home/user1/.local/bin/uv` and 128 CPUs, except `nnmc71` with 96:
@@ -117,6 +117,14 @@ Do not record token values or other secrets here.
 ## Project-Specific Constraints
 
 - `dataset/LGG100/` holds the hub data with project task strings. In drawer, biomanual and simple-pick, the `meta/tasks.jsonl` and `meta/episodes.jsonl` `tasks` fields carry the project instructions (`docs/lgg100_dataset.md` → Task Strings). The hub originals are kept in `dataset/LGG100_original_meta/<name>/meta/`. All other dataset content is read-only, and filtered versions are written to a separate location. Re-running `hf download` into `dataset/LGG100/<name>` can restore the hub task strings. These task strings are not pushed to the hub.
+- RoboTwin 2.0 data (`docs/robotwin_training_setup.md`):
+  - `dataset/robotwin2.0/robotwin2.0/` holds the FastWAM LeRobot release (`yuanty/robotwin2.0-fastwam`) and the generated `nonidle_ranges.json`. `dataset/robotwin2.0/dataset_stats.json` is the dataset's normalization file.
+  - `nnmc73` keeps a byte-identical copy and the RoboTwin runs' large files on its local disk under `/home/user1/workspace/jingwu/ImageWAMFT_nnmc73/` (`/shared/user73/workspace/jingwu/ImageWAMFT_nnmc73/` from other nodes):
+    - `dataset/robotwin2.0/`;
+    - `text_cache/flux2_qwen3_cache_9b/` (Qwen3-8B, 2.9 TB);
+    - `text_cache/qwenimage21_text_cache/` (Qwen3-VL, 0.97 TB);
+    - `checkpoints/` (the Qwen-Image-2.1 RoboTwin run).
+  - The released FLUX.2-4B RoboTwin model is in `checkpoints/imagewam_release/robotwin/flux2_klein_4b/`.
 - Base weights live under `BaseModel/`:
   - `flux2/FLUX.2-klein-base-9B/flux-2-klein-base-9b.safetensors`
   - `flux2/FLUX.2-klein-base-4B/flux-2-klein-base-4b.safetensors`

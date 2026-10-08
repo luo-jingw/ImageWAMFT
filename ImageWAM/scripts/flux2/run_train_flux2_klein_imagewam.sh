@@ -49,7 +49,8 @@ case "${TASK_TYPE}" in
     ;;
   robotwin)
     ACTION_DIM=14
-    TASK_NAME="robotwin_${TASK_SUFFIX}"
+    # ROBOTWIN_TASK_NAME selects another RoboTwin task config (e.g. robotwin_flux2_klein_9b_base_b384_imagewam).
+    TASK_NAME="${ROBOTWIN_TASK_NAME:-robotwin_${TASK_SUFFIX}}"
     if [ "${USE_CLEAN_ROBOTWIN}" = "true" ]; then
       TASK_NAME="${TASK_NAME/_imagewam/_clean_imagewam}"
     elif [ "${USE_CLEAN_ROBOTWIN}" != "false" ]; then

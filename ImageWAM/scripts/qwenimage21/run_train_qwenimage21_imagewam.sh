@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Qwen-Image-2.1 ImageWAM training on the LGG100 Unitree G1 data (plan.md M13).
-# Data overrides match the TASK_TYPE=g1 branch of scripts/flux2/run_train_flux2_klein_imagewam.sh; the text cache
+# Qwen-Image-2.1 ImageWAM training. TASK_TYPE=g1 (default): the LGG100 Unitree G1 data; TASK_TYPE=robotwin: RoboTwin 2.0
+# (task robotwin_qwenimage21_imagewam; ROBOTWIN_ROOT and NONIDLE_FILTER_PATH required).
+# Data overrides match the corresponding branch of scripts/flux2/run_train_flux2_klein_imagewam.sh; the text cache
 # (scripts/qwenimage21/precompute_qwenimage21_text_embeds.py, run in .venv-qwenimage) must already exist.
 set -euo pipefail
 
@@ -16,13 +17,33 @@ imagewam_require_env DATA_ROOT
 imagewam_require_env MODEL_ROOT
 
 QWENIMAGE21_ROOT="${QWENIMAGE21_ROOT:-${MODEL_ROOT}/Qwen-Image-2.1}"
-TASK_NAME="g1_lgg100_qwenimage21_imagewam"
-ACTION_DIM=16
-G1_ROOT="${G1_ROOT:-${DATA_ROOT}/LGG100}"
-G1_DATASET_DIRS="[${G1_ROOT}/drawer,${G1_ROOT}/biomanual,${G1_ROOT}/simple-pick,${G1_ROOT}/Stack-the-cubes]"
-QWEN_CACHE_DIR="${QWEN_CACHE_DIR:-${REPO_ROOT}/data/g1_lgg100/qwenimage21_text_cache}"
-NORM_STATS="${NORM_STATS:?set NORM_STATS to the FLUX.2 run dataset_stats.json (plan.md D8)}"
-ACTION_INIT="${ACTION_INIT:-checkpoints/action_dit_qwenimage21_g1_init.pt}"
+TASK_TYPE="${TASK_TYPE:-g1}"
+DATA_OVERRIDES=()
+case "${TASK_TYPE}" in
+  g1)
+    TASK_NAME="g1_lgg100_qwenimage21_imagewam"
+    ACTION_DIM=16
+    G1_ROOT="${G1_ROOT:-${DATA_ROOT}/LGG100}"
+    DATASET_DIRS="[${G1_ROOT}/drawer,${G1_ROOT}/biomanual,${G1_ROOT}/simple-pick,${G1_ROOT}/Stack-the-cubes]"
+    QWEN_CACHE_DIR="${QWEN_CACHE_DIR:-${REPO_ROOT}/data/g1_lgg100/qwenimage21_text_cache}"
+    ACTION_INIT="${ACTION_INIT:-checkpoints/action_dit_qwenimage21_g1_init.pt}"
+    ;;
+  robotwin)
+    TASK_NAME="robotwin_qwenimage21_imagewam"
+    ACTION_DIM=14
+    imagewam_require_env ROBOTWIN_ROOT
+    imagewam_require_env NONIDLE_FILTER_PATH
+    imagewam_require_env QWEN_CACHE_DIR
+    DATASET_DIRS="[${ROBOTWIN_ROOT}]"
+    ACTION_INIT="${ACTION_INIT:-checkpoints/action_dit_qwenimage21_robotwin_init.pt}"
+    DATA_OVERRIDES=(
+      "data.train.nonidle_filter_path=${NONIDLE_FILTER_PATH}"
+      "data.val.nonidle_filter_path=null"
+    )
+    ;;
+  *) echo "Invalid TASK_TYPE=${TASK_TYPE}; expected g1 or robotwin" >&2; exit 1 ;;
+esac
+NORM_STATS="${NORM_STATS:?set NORM_STATS to the normalization statistics dataset_stats.json}"
 export PYTHONPATH="${REPO_ROOT}/src${PYTHONPATH:+:${PYTHONPATH}}"
 
 if [ ! -d "${QWEN_CACHE_DIR}" ] || [ -z "$(ls -A "${QWEN_CACHE_DIR}")" ]; then
@@ -51,8 +72,8 @@ esac
 
 TASK="${TASK_NAME}" imagewam_run bash "${TRAIN_SCRIPT}" "${GPU_PER_NODE}" \
   task="${TASK_NAME}" \
-  "data.train.dataset_dirs=${G1_DATASET_DIRS}" \
-  "data.val.dataset_dirs=${G1_DATASET_DIRS}" \
+  "data.train.dataset_dirs=${DATASET_DIRS}" \
+  "data.val.dataset_dirs=${DATASET_DIRS}" \
   "data.train.qwen_text_cache_dir=${QWEN_CACHE_DIR}" \
   "data.val.qwen_text_cache_dir=${QWEN_CACHE_DIR}" \
   "data.train.pretrained_norm_stats=${NORM_STATS}" \
@@ -60,4 +81,5 @@ TASK="${TASK_NAME}" imagewam_run bash "${TRAIN_SCRIPT}" "${GPU_PER_NODE}" \
   "model.transformer_dir=${QWENIMAGE21_ROOT}/transformer" \
   "model.vae_dir=${QWENIMAGE21_ROOT}/vae" \
   "model.action_dit_pretrained_path=${ACTION_INIT}" \
+  "${DATA_OVERRIDES[@]}" \
   "$@"
