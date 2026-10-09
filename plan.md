@@ -7,6 +7,7 @@ Approval: the user's instructions of 2026-10-08 fix the scope and resources.
 - Use the released FLUX.2-4B RoboTwin model instead of retraining 4B.
 - Keep the full recipe, with no reduction.
 - Qwen-Image-2.1 trains on `nnmc73` with 4 B300; FLUX.2-9B on `nnmc71` with 8 H100. The 8-GPU use of `nnmc71` is a user-granted exception to the 4-per-node policy.
+- Later the same day (20:45 EDT) the user moved Qwen-Image-2.1 to all 8 `nnmc73` B300 and asked to consider 8 B300 for FLUX.2-9B as well. `nnmc73` GPUs 4–7 were the only idle B300 (`nnmc74` and `nnmc75` were fully used by others), so FLUX.2-9B moves to `nnmc73` after Qwen-Image-2.1 finishes (D11).
 - The user asked for a full re-check of the training settings, prompt diversity included, without relying on earlier records. The result is `docs/robotwin_training_setup.md`.
 
 The previous plan (G1 LGG100 training and policy server, Phases 1–24, completed) is in git history.
@@ -37,7 +38,7 @@ Neither FLUX.2-9B nor Qwen-Image-2.1 can be trained on RoboTwin with the release
    - Global batch 384 = 8 H100 × 4 per GPU × gradient accumulation 12. 5 epochs, about 69.9k optimizer steps.
    - bf16; AdamW (0.9, 0.95); lr 1e-4; weight decay 0.01; 5% warmup then cosine; gradient clipping 1.0 (D9); DeepSpeed ZeRO-1 (D10).
    - Video augmentation, camera layout, horizons, normalization statistics and validation cadence as released.
-2. **Qwen-Image-2.1 RoboTwin model:** the same data, split, recipe, length and global batch of 384 on 4 B300 on `nnmc73`. Only the backbone-bound components differ, as in the G1 work: editing DiT, text features (Qwen3-VL, 128 slots), VAE, and action-DiT depth.
+2. **Qwen-Image-2.1 RoboTwin model:** the same data, split, recipe, length and global batch of 384 on 8 B300 on `nnmc73`. Only the backbone-bound components differ, as in the G1 work: editing DiT, text features (Qwen3-VL, 128 slots), VAE, and action-DiT depth.
 3. **RoboTwin evaluation** of the released 4B model and both trained models under the paper protocol:
    - 50 tasks, clean and randomized, seed 42, unseen instructions;
    - 10 denoising steps, action horizon 16, replan 16, 100 trials per task.
@@ -71,6 +72,7 @@ Constraint check against this goal:
 - **D2 Global batch 384** for both models. The per-GPU micro-batch and accumulation are set per hardware so that micro × accumulation × GPUs = 384, and epochs stay at 5.
   - FLUX.2-9B: 4 × 12 × 8.
   - Qwen-Image-2.1: the largest micro-batch that fits a B300, with accumulation making 96 per GPU. Phase 4 fixed it at 96 × 1 × 4 (peak 92.8 GB of 275 GB).
+  - Qwen-Image-2.1 on 8 B300 (2026-10-08): 48 × 1 × 8. The 4-GPU run was stopped at step 2,000, before its first saved state at step 5,000, and restarted from step 0.
 - **D3 Text cache format unchanged:** padded 128 slots, one file per prompt, as the training loader reads it.
 - **D4 Cache placement:**
   - Qwen-Image-2.1 cache on `nnmc73` local disk.
@@ -86,6 +88,12 @@ Constraint check against this goal:
   - The optimizer math is the same in both stages: AdamW on fp32 partitions, clipping on the global norm.
   - `launch/robotwin_flux2_9b_train.sh ZERO=1` uses `scripts/ds_configs/ds_zero1_config.json`, which sets `gradient_clipping` 1.0.
   - Qwen-Image-2.1 stays on ZeRO-2. It accumulates once per step, so ZeRO-1 would save no communication.
+- **D11 FLUX.2-9B moves to the 8 `nnmc73` B300 when Qwen-Image-2.1 finishes** (user request, 2026-10-08):
+  - It resumes from the latest state under `checkpoints/state/` (saved every 5,000 steps). The rank count stays 8, so the ZeRO-1 optimizer partitions load unchanged.
+  - Global batch, optimizer step count and schedule are unchanged. The B300 micro-batch × accumulation is chosen by measurement at the move.
+  - `ResumableEpochSampler` skips `batch_in_epoch × micro-batch × ranks` samples, so a micro-batch other than 4 needs `batch_in_epoch` in the state's `trainer_state.json` rescaled by 4 / new micro-batch (on a copy of the state).
+  - It needs a B300 launcher (`.venv-nnmc73`); the FLUX.2-9B text cache and the dataset copy are already on `nnmc73` local disk.
+  - The move is done only if a short measurement on B300 is faster than the `nnmc71` rate (9.9 s per step).
 - **D9 Gradient clipping 1.0** (user decision, 2026-10-08): follow the paper (Table 8) with `GRAD_CLIP=1.0` (`scripts/ds_configs/ds_zero2_config.json`). The released 4B was most likely trained without effective clipping (upstream DeepSpeed configs set none), so this is the one recipe difference to the released model, stated with every comparison.
 
 ## Responsibilities

@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # Qwen-Image-2.1 ImageWAM on RoboTwin 2.0 with the released FLUX.2-4B recipe (plan.md; docs/robotwin_training_setup.md):
-# global batch 384 = MICRO_BATCH x GRAD_ACCUM x GPUs, 5 epochs, DeepSpeed ZeRO-2, on nnmc73 (4 B300, .venv-nnmc73).
+# global batch 384 = MICRO_BATCH x GRAD_ACCUM x GPUs, 5 epochs, DeepSpeed ZeRO-2, on nnmc73 B300 (.venv-nnmc73).
 # Dataset copy, Qwen3-VL text cache and run directory are on nnmc73's local disk (DATA_73 below).
 #
-#   GRAD_CLIP=none MICRO_BATCH=12 GPUS=0,1,2,3 bash /shared/user71/workspace/jingwu/ImageWAMFT/launch/robotwin_qwenimage21_train.sh
+#   GRAD_CLIP=1.0 MICRO_BATCH=48 GPUS=0,1,2,3,4,5,6,7 bash /shared/user71/workspace/jingwu/ImageWAMFT/launch/robotwin_qwenimage21_train.sh
 #
 # GRAD_CLIP (required): `none` uses the upstream DeepSpeed config without gradient clipping, the configuration the
 # released model was trained with; `1.0` uses the project config with gradient_clipping 1.0 (paper Table 8).
