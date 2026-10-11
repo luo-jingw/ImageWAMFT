@@ -330,3 +330,37 @@ Open.
 - Workaround for the cache: it moved to `nnmc73` (`checkpoints/robotwin_logs/cache_qwen_nnmc73.sh`, `.venv-qwenimage-nnmc73`).
 - Cache writes are atomic, so the files written on `nnmc72` are valid.
 - RoboTwin evaluation (`plan.md` D6) needs another GPU host or this issue resolved.
+
+# ISSUE-011
+
+Status: Open
+
+Area: shared nodes (`nnmc73` GPUs during the RoboTwin Qwen-Image-2.1 run)
+
+## Observation
+
+From 2026-10-11 about 07:45 UTC, another job runs on all 8 `nnmc73` B300 next to the Qwen-Image-2.1 RoboTwin run. The run slowed from 4.05 s to about 20 s per optimizer step.
+
+## Impact
+
+- Qwen-Image-2.1 completion moves from about 22 hours after the slowdown to about 4.6 days, if the other job stays.
+- The training math is unaffected: the step count, data order and optimizer are unchanged, and the log shows no errors or non-finite losses.
+
+## Evidence
+
+- Step times from `train.log`: 250 steps took 16.9 minutes until step 47,750 (07:42:58 UTC), then 47 minutes for the next 250 steps (08:30:16), then 75 to 87 minutes per 250 steps up to step 50,000 (15:23:25).
+- `nvidia-smi` at 15:45 UTC: each GPU holds one of this run's processes (55 GB) and one `train_cora.py` process (`/home/user1/miniconda3/envs/nnmc_llm`, Llama-2-7B or Llama-3-8B DoRA fine-tuning, 105–155 GB). Six of those started at about 07:48 UTC and two at about 14:38 UTC.
+- The `train_cora.py` command lines do not contain `ImageWAMFT`, so they belong to another user of the shared `user1` account.
+- At the same time, every GPU of `nnmc72`, `nnmc74` and `nnmc75` was in use, so no other B300 node or 8-GPU node was free to move the run to.
+
+## Hypotheses
+
+Two processes share each GPU by time-slicing, and the other job takes most of the compute time.
+
+## Next Experiment
+
+None from this project. Another user's processes are not stopped from here. The run continues and returns to about 4 s per step when the other job ends. The latest resumable state is `checkpoints/state/step_050000`.
+
+## Resolution
+
+Open.

@@ -22,6 +22,7 @@ Run changes:
 - Qwen-Image-2.1 first ran on `nnmc73` GPUs 0–3 with 96 × 1 × 4 from 2026-10-08 16:59 EDT at 6.47 s per step (steps 1,000–2,000). On the user's request it was stopped at step 2,000, before its first saved state, and restarted from step 0 on all 8 GPUs. The stopped run is kept as `robotwin_qwenimage21_imagewam.4gpu_stopped/` next to the run directory.
 - 8 GPUs give 1.55× the 4-GPU speed. Forward plus backward halves (5.9 s to 3.0 s per step); the remaining time per step grows from 0.5 s to about 1.1 s. `nnmc73` has no active NVLink (PROJECT.md), so the gradient and parameter exchange runs over PCIe and across sockets.
 - FLUX.2-9B stays on `nnmc71` for the whole run (`plan.md` D11).
+- From 2026-10-11 07:45 UTC another user's job shares all 8 `nnmc73` GPUs, and the Qwen-Image-2.1 run slowed to about 20 s per step (ISSUE-011).
 
 ## Training
 
