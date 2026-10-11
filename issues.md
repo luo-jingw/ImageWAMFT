@@ -335,31 +335,30 @@ Open.
 
 Status: Open
 
-Area: shared nodes (`nnmc73` GPUs during the RoboTwin Qwen-Image-2.1 run)
+Area: shared nodes (`nnmc73` GPUs shared with another user's jobs)
 
 ## Observation
 
-From 2026-10-11 about 07:45 UTC, another job runs on all 8 `nnmc73` B300 next to the Qwen-Image-2.1 RoboTwin run. The run slowed from 4.05 s to about 20 s per optimizer step.
+Since about 08:00 UTC on 2026-10-11, another user's single-GPU jobs run on the same 8 `nnmc73` B300 as the RoboTwin Qwen-Image-2.1 run. The run slowed from 4.05 s per step to 18–31 s per step.
 
 ## Impact
 
-- Qwen-Image-2.1 completion moves from about 22 hours after the slowdown to about 4.6 days, if the other job stays.
-- The training math is unaffected: the step count, data order and optimizer are unchanged, and the log shows no errors or non-finite losses.
+- Qwen-Image-2.1 at step 50,780 of 69,900 (2026-10-11 20:45 UTC): the remaining 19,120 steps take about 21.5 h at the unshared rate and 4.4–6.6 days at the shared rate.
+- No effect on correctness: no non-finite loss, no restart; weights through step 50,000 are saved.
 
 ## Evidence
 
-- Step times from `train.log`: 250 steps took 16.9 minutes until step 47,750 (07:42:58 UTC), then 47 minutes for the next 250 steps (08:30:16), then 75 to 87 minutes per 250 steps up to step 50,000 (15:23:25).
-- `nvidia-smi` at 15:45 UTC: each GPU holds one of this run's processes (55 GB) and one `train_cora.py` process (`/home/user1/miniconda3/envs/nnmc_llm`, Llama-2-7B or Llama-3-8B DoRA fine-tuning, 105–155 GB). Six of those started at about 07:48 UTC and two at about 14:38 UTC.
-- The `train_cora.py` command lines do not contain `ImageWAMFT`, so they belong to another user of the shared `user1` account.
-- At the same time, every GPU of `nnmc72`, `nnmc74` and `nnmc75` was in use, so no other B300 node or 8-GPU node was free to move the run to.
+- Per-200-step rate (`train.log` timestamps, UTC): 4.03–4.06 s per step up to step 48,600 (07:49), 18.0 s at 48,800 (08:45), 19.4–21.0 s from 49,200 to 50,400, 30.6 s at 50,600 (19:13).
+- `nvidia-smi` at 20:46 UTC: on each GPU, one Qwen-Image-2.1 rank (55 GB) and one `train_cora.py` process (Meta-Llama-3-8B, 149–173 GB). The jobs are started through `/shared/user57/workspace/nnmc_ww/infra/run_logged.sh` and write to `/shared/user73/workspace/nnmc_ww_local_outputs/` (2,379 directories; the 2026-10-11 ones are a learning-rate and rank sweep, a new job every few minutes).
+- `nnmc71` is not affected: the FLUX.2-9B run holds 76.6 of 95.8 GB per H100, and its rate stays at 9.97 s per step.
 
 ## Hypotheses
 
-Two processes share each GPU by time-slicing, and the other job takes most of the compute time.
+The sweep's scheduler places jobs on GPUs with enough free memory and does not treat a GPU with another process as busy. The Qwen-Image-2.1 run leaves about 220 GB free per B300.
 
 ## Next Experiment
 
-None from this project. Another user's processes are not stopped from here. The run continues and returns to about 4 s per step when the other job ends. The latest resumable state is `checkpoints/state/step_050000`.
+None from this project. Whoever owns the `nnmc57` sweep scheduler has to exclude the `nnmc73` GPUs until the run finishes, or the run continues at the shared rate.
 
 ## Resolution
 
