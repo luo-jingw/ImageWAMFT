@@ -349,6 +349,7 @@ Since about 08:00 UTC on 2026-10-11, another user's single-GPU jobs run on the s
 ## Evidence
 
 - Per-200-step rate (`train.log` timestamps, UTC): 4.03–4.06 s per step up to step 48,600 (07:49), 18.0 s at 48,800 (08:45), 19.4–21.0 s from 49,200 to 50,400, 30.6 s at 50,600 (19:13).
+- 2026-10-12: 31.7 s per step from step 51,000 to 51,600, 35.5–36.2 s from 51,800 to 52,600 (14:07 UTC). At 14:11 UTC all 8 GPUs still carry one `train_cora.py` process each (161 GB). `nnmc72`, `nnmc74` and `nnmc75` had no idle GPU at that time.
 - `nvidia-smi` at 20:46 UTC: on each GPU, one Qwen-Image-2.1 rank (55 GB) and one `train_cora.py` process (Meta-Llama-3-8B, 149–173 GB). The jobs are started through `/shared/user57/workspace/nnmc_ww/infra/run_logged.sh` and write to `/shared/user73/workspace/nnmc_ww_local_outputs/` (2,379 directories; the 2026-10-11 ones are a learning-rate and rank sweep, a new job every few minutes).
 - `nnmc71` is not affected: the FLUX.2-9B run holds 76.6 of 95.8 GB per H100, and its rate stays at 9.97 s per step.
 
