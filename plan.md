@@ -88,8 +88,11 @@ Constraint check against this goal:
   - The optimizer math is the same in both stages: AdamW on fp32 partitions, clipping on the global norm.
   - `launch/robotwin_flux2_9b_train.sh ZERO=1` uses `scripts/ds_configs/ds_zero1_config.json`, which sets `gradient_clipping` 1.0.
   - Qwen-Image-2.1 stays on ZeRO-2. It accumulates once per step, so ZeRO-1 would save no communication.
-- **D11 FLUX.2-9B stays on the 8 `nnmc71` H100 for the whole run** (user decision, 2026-10-08). A move to the 8 `nnmc73` B300 after Qwen-Image-2.1 finishes, resuming from a saved state, was proposed and declined.
-  - For any later resume with a different micro-batch: `ResumableEpochSampler` skips `batch_in_epoch × micro-batch × ranks` samples, so `batch_in_epoch` in the state's `trainer_state.json` must be rescaled by old / new micro-batch.
+- **D11 FLUX.2-9B continues on 4 `nnmc71` H100 (GPUs 0–3) from the step-45,000 state** (user decision, 2026-10-13); it ran on all 8 `nnmc71` H100 with ZeRO-1 up to that state. A move to the 8 `nnmc72` H100 was blocked by another project's eviction script on that node (ISSUE-010).
+  - Configuration on 4 GPUs: 4 × 24 × 4 = 384, ZeRO-2, `optimizer_max_group_numel` 1e9 on every launch (one group would give 2.5B elements per rank, above the 2^31 limit of `docs/g1_training_setup.md`).
+  - A ZeRO-1/2 state only loads on its own rank count and optimizer group layout. `ImageWAM/scripts/reshard_training_state.py` converts it to a DeepSpeed universal checkpoint, repeats the saved optimizer group for the new group split, and rescales `batch_in_epoch`. The first resume uses `LOAD_UNIVERSAL=1` (`scripts/ds_configs/ds_zero2_load_universal_config.json`); later states are native 4-rank states.
+  - `ResumableEpochSampler` skips `batch_in_epoch × micro-batch × ranks` samples of one global permutation, so `batch_in_epoch` is rescaled by old / new micro-batch × ranks and the remaining sample order is unchanged.
+  - Fallback if the 4-GPU resume fails: the unchanged 8-rank state resumes on 8 GPUs with the original launch.
 - **D9 Gradient clipping 1.0** (user decision, 2026-10-08): follow the paper (Table 8) with `GRAD_CLIP=1.0` (`scripts/ds_configs/ds_zero2_config.json`). The released 4B was most likely trained without effective clipping (upstream DeepSpeed configs set none), so this is the one recipe difference to the released model, stated with every comparison.
 
 ## Responsibilities

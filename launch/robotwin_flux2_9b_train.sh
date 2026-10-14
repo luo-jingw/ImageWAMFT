@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # FLUX.2-klein-base-9B ImageWAM on RoboTwin 2.0 with the released FLUX.2-4B recipe (plan.md; docs/robotwin_training_setup.md):
 # global batch 384 = 4 per GPU x gradient accumulation x GPUs, 5 epochs, DeepSpeed ZeRO-2, on nnmc71
-# (8 H100, user-approved exception to the 4-GPU policy). The Qwen3-8B text cache (2.9 TB) lives on nnmc73's disk and
-# is read over NFS.
+# (8 H100 up to step 45,000, a user-approved exception to the 4-GPU policy; GPUs 0-3 after it). The Qwen3-8B text
+# cache (2.9 TB) lives on nnmc73's disk and is read over NFS.
 #
 #   GRAD_CLIP=none GPUS=0,1,2,3,4,5,6,7 bash launch/robotwin_flux2_9b_train.sh [hydra overrides]
 #
@@ -13,6 +13,9 @@
 # optimizer step instead of at every micro-step; it requires GRAD_CLIP=1.0 (scripts/ds_configs/ds_zero1_config.json).
 # SMOKE_STEPS=N stops after N optimizer steps and writes to checkpoints/<run>_smoke.
 # Resume after an interruption by appending resume=<OUT>/checkpoints/state/step_XXXXXX.
+# A state saved with another GPU count is first converted by ImageWAM/scripts/reshard_training_state.py and resumed
+# once with LOAD_UNIVERSAL=1 (ZeRO-2 only) and resume=<converted dir>. On 4 GPUs append
+# optimizer_max_group_numel=1000000000 to every launch (ZeRO partitions above 2^31 elements give non-finite gradients).
 set -euo pipefail
 PROJECT_ROOT=/home/user1/workspace/jingwu/ImageWAMFT
 if [ "$(hostname)" != nnmc71 ]; then
@@ -75,6 +78,13 @@ case "${ZERO}" in
   1) if [ "${GRAD_CLIP}" != 1.0 ]; then echo "ZERO=1 has only the gradient_clipping 1.0 config" >&2; exit 2; fi ;;
   *) echo "ZERO must be 1 or 2" >&2; exit 2 ;;
 esac
+if [ "${LOAD_UNIVERSAL:-0}" = 1 ]; then
+  if [ "${GRAD_CLIP}" != 1.0 ] || [ "${ZERO}" != 2 ]; then
+    echo "LOAD_UNIVERSAL=1 needs GRAD_CLIP=1.0 and ZERO=2" >&2
+    exit 2
+  fi
+  export ACCELERATE_CONFIG_FILE=scripts/accelerate_configs/accelerate_zero2_load_universal_ds.yaml
+fi
 if (( 384 % (4 * NUM_GPUS) != 0 )); then
   echo "Global batch 384 is not divisible by 4 x ${NUM_GPUS} GPUs" >&2
   exit 2

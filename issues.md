@@ -316,13 +316,19 @@ Since at least 2026-10-08, every process of ours that holds a GPU on `nnmc72` re
   - Both GPU processes received SIGTERM at 13:37:03. The CPU process was not touched.
 - Over the same sweeps, this project's jobs on `nnmc71` (FLUX.2-9B cache) and `nnmc73` (Qwen-Image-2.1 cache) were not touched. The `nnmc71` sshd log visible to `user1` shows no `nnmc57` sessions.
 
+- Probe on 2026-10-13: one CUDA process per GPU on all 8 `nnmc72` GPUs from 10:39:49 PDT, each logging the sender of any SIGTERM (`tmp/gpu_sigterm_probe.py`, log `tmp/gpu_sigterm_probe_nnmc72.log`).
+  - All 8 received SIGTERM at 11:07:04 PDT from `bash /home/user1/workspace/nnmc_wj_local_outputs/EmbodiedMultiViewKV/proj/scripts/evict_foreign.sh` (uid 1000, the shared `user1`), a file on `nnmc72`'s local disk.
+  - The script's header records a standing order of its owner's project (EmbodiedMultiViewKV, 2026-10-06): use all of `nnmc72` and kill other processes on it. A cron tick runs it every 30 minutes.
+  - It kills every GPU process of `user1` whose executable, working directory or command line is not under that project's environment or directory and contains neither `/nnmc_ww` nor `/nnmc_wj`. This project's processes match that rule.
+  - Its log (`.../EmbodiedMultiViewKV/proj/logs/evict_foreign_nnmc72.log`) records 14 sweeps that killed something from 2026-10-08 to 2026-10-13, 8 of them on 2026-10-12.
+
 ## Hypotheses
 
-Another user's automation on `nnmc57` terminates GPU processes on `nnmc72` every 30 minutes, possibly to reserve the node.
+None. The cause is the eviction script above.
 
 ## Next Experiment
 
-None from this project. Whoever owns the `nnmc57` automation has to exclude this project's processes, or the user decides that `nnmc72` is no longer available.
+None from this project. The node is reserved by another project's automation. It becomes usable when that project's owner excludes `ImageWAMFT` processes or ends the reservation. Changing paths to match the script's exceptions is not an option.
 
 ## Resolution
 
@@ -364,3 +370,37 @@ None from this project. Whoever owns the `nnmc57` sweep scheduler has to exclude
 ## Resolution
 
 Open.
+
+# ISSUE-012
+
+Status: Open
+
+Area: RoboTwin FLUX.2-9B run, logged gradient norm
+
+## Observation
+
+After the FLUX.2-9B run moved from 8 GPUs (ZeRO-1, accumulation 12) to 4 GPUs (ZeRO-2, accumulation 24, 11 optimizer groups), the logged `train/grad_norm` doubled: 2.21 against 1.10 over the same steps 40,001–42,150, on the same samples.
+
+## Impact
+
+- `train/grad_norm` is not comparable across the switch at step 40,000.
+- Training loss and validation metrics are unchanged within their noise (`docs/robotwin_training_results.md`, Run changes).
+- With `gradient_clipping` 1.0, the first run's logged norm was above the threshold at 146 of 214 logged steps and the resumed run's at all 215 (minimum 1.33). If clipping uses the logged norm, the resumed run clips at every step.
+
+## Evidence
+
+- The 8-GPU smoke runs with ZeRO-1 and ZeRO-2 at the same accumulation of 12 logged similar norms: 46.8 / 35.1 / 16.5 against 30.7 / 31.0 / 18.7 at steps 10 / 20 / 30.
+- `train/grad_norm` is `accelerator.clip_grad_norm_`, which under DeepSpeed returns `engine.get_global_grad_norm()` from the ZeRO optimizer.
+
+## Hypotheses
+
+The ZeRO-2 norm scales with gradient accumulation or with the inverse of the data-parallel size. Both changed by a factor of 2 here.
+
+## Next Experiment
+
+Short smoke runs from the same state with ZeRO-2 on 4 GPUs at accumulation 12 and 24, comparing the logged norm at the first step. This needs 4 free GPUs, so it waits until a run finishes.
+
+## Resolution
+
+Open.
+
