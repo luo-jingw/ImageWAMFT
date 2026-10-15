@@ -350,6 +350,7 @@ Since about 08:00 UTC on 2026-10-11, another user's single-GPU jobs run on the s
 ## Impact
 
 - Qwen-Image-2.1 at step 50,780 of 69,900 (2026-10-11 20:45 UTC): the remaining 19,120 steps take about 21.5 h at the unshared rate and 4.4–6.6 days at the shared rate.
+- At step 60,410 (2026-10-15 16:49 UTC) the remaining 9,490 steps take about 10.7 h unshared and 4.0 days at 36.3 s per step (end about 2026-10-19 16:30 UTC).
 - No effect on correctness: no non-finite loss, no restart; weights through step 50,000 are saved.
 
 ## Evidence
@@ -358,6 +359,7 @@ Since about 08:00 UTC on 2026-10-11, another user's single-GPU jobs run on the s
 - 2026-10-12: 31.7 s per step from step 51,000 to 51,600, 35.5–36.2 s from 51,800 to 52,600 (14:07 UTC). At 14:11 UTC all 8 GPUs still carry one `train_cora.py` process each (161 GB). `nnmc72`, `nnmc74` and `nnmc75` had no idle GPU at that time.
 - `nvidia-smi` at 20:46 UTC: on each GPU, one Qwen-Image-2.1 rank (55 GB) and one `train_cora.py` process (Meta-Llama-3-8B, 149–173 GB). The jobs are started through `/shared/user57/workspace/nnmc_ww/infra/run_logged.sh` and write to `/shared/user73/workspace/nnmc_ww_local_outputs/` (2,379 directories; the 2026-10-11 ones are a learning-rate and rank sweep, a new job every few minutes).
 - `nnmc71` is not affected: the FLUX.2-9B run holds 76.6 of 95.8 GB per H100, and its rate stays at 9.97 s per step.
+- 2026-10-15: 36.3 s per step from step 59,410 to 60,410 (16:49 UTC). Each GPU carries one Qwen-Image-2.1 rank (55 GB) and one other process: four `train_cora.py` (Mistral-7B, 160–162 GB) and four `eval_math.py` (28–85 GB).
 
 ## Hypotheses
 

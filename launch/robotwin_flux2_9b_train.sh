@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # FLUX.2-klein-base-9B ImageWAM on RoboTwin 2.0 with the released FLUX.2-4B recipe (plan.md; docs/robotwin_training_setup.md):
 # global batch 384 = 4 per GPU x gradient accumulation x GPUs, 5 epochs, DeepSpeed ZeRO-2, on nnmc71
-# (8 H100 up to step 45,000, a user-approved exception to the 4-GPU policy; GPUs 0-3 after it). The Qwen3-8B text
+# (8 H100 up to step 42,150, a user-approved exception to the 4-GPU policy; GPUs 0-3 after it). The Qwen3-8B text
 # cache (2.9 TB) lives on nnmc73's disk and is read over NFS.
 #
 #   GRAD_CLIP=none GPUS=0,1,2,3,4,5,6,7 bash launch/robotwin_flux2_9b_train.sh [hydra overrides]
