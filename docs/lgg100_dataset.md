@@ -139,3 +139,18 @@ Measured with `BaseLerobotDataset` using `episode_index_filter: {mode: explicit_
 | Validation | 4: episode 8 of each root (drawer 496, biomanual 363, simple-pick 210, Stack-the-cubes 1,470 frames) | 2,539 |
 
 At effective batch 64 (4 per GPU × 8 GPUs × gradient accumulation 2), one epoch is 2,795 optimizer steps, so 10 epochs are 27,950 steps.
+
+## Merged Copy for the Hub
+
+`launch/lgg100_release_dataset.py` writes one LeRobot v2.1 dataset from the four datasets to `dataset/hf_release/G1-Dex1-Tabletop/` (3.7 GB):
+
+- the 339 valid episodes, in the order drawer, biomanual, simple-pick, Stack-the-cubes (`task_index` 0–3; `episode_index` 0–99, 100–148, 149–239, 240–338);
+- the project task strings;
+- `meta/episode_sources.jsonl`, the source dataset and episode index of every episode;
+- `README.md`, the dataset card.
+
+Checked on 2026-10-15:
+- Parquet schemas and the `observation.state`, `action`, `timestamp` and `frame_index` columns equal the source in all 339 episodes. `episode_index`, `index` and `task_index` are contiguous.
+- All 1,017 videos are byte-identical to their source files.
+- The vendored `LeRobotDataset` loads 181,403 frames, 339 episodes and 4 tasks, and decodes frames of all four tasks. Its aggregated state mean equals the mean over all parquet rows.
+- `datasets.load_dataset` on the directory reads the 181,403 rows through the card's `configs` entry.
