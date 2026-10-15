@@ -142,7 +142,7 @@ At effective batch 64 (4 per GPU × 8 GPUs × gradient accumulation 2), one epoc
 
 ## Merged Copy for the Hub
 
-`launch/lgg100_release_dataset.py` writes one LeRobot v2.1 dataset from the four datasets to `dataset/hf_release/G1-Dex1-Tabletop/` (3.7 GB):
+`launch/lgg100_release_dataset.py` writes one LeRobot v2.1 dataset from the four datasets to `dataset/hf_release/G1-Dex1-4tasks/` (3.7 GB):
 
 - the 339 valid episodes, in the order drawer, biomanual, simple-pick, Stack-the-cubes (`task_index` 0–3; `episode_index` 0–99, 100–148, 149–239, 240–338);
 - the project task strings;
@@ -154,3 +154,5 @@ Checked on 2026-10-15:
 - All 1,017 videos are byte-identical to their source files.
 - The vendored `LeRobotDataset` loads 181,403 frames, 339 episodes and 4 tasks, and decodes frames of all four tasks. Its aggregated state mean equals the mean over all parquet rows.
 - `datasets.load_dataset` on the directory reads the 181,403 rows through the card's `configs` entry.
+
+Published on 2026-10-15 as the public dataset [`JingwuLuo/G1-Dex1-4tasks`](https://huggingface.co/datasets/JingwuLuo/G1-Dex1-4tasks) with the project `HF_TOKEN`. All 1,362 files match the local copy: 1,356 LFS files by sha256, the others by git blob hash, 3,961,403,448 bytes in total. `datasets.load_dataset("JingwuLuo/G1-Dex1-4tasks")` reads the 181,403 rows from the Hub.

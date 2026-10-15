@@ -9,7 +9,7 @@
   `task_index`.
 - `meta/episode_sources.jsonl` maps every episode to its source repository and episode index.
 
-  .venv/bin/python launch/lgg100_release_dataset.py --output-dir dataset/hf_release/G1-Dex1-Tabletop
+  .venv/bin/python launch/lgg100_release_dataset.py --output-dir dataset/hf_release/G1-Dex1-4tasks
 """
 
 import argparse
