@@ -303,7 +303,7 @@ Since at least 2026-10-08, every process of ours that holds a GPU on `nnmc72` re
 
 ## Impact
 
-- `nnmc72` GPUs cannot run anything longer than about 30 minutes: training, the text cache, or RoboTwin evaluation (`plan.md` D6).
+- `nnmc72` GPUs cannot run anything longer than about 30 minutes: training, the text cache, or RoboTwin evaluation.
 - The G1 runs on `nnmc72` (2026-10-01 to 10-05) were not affected, so this behavior is newer.
 
 ## Evidence
@@ -335,7 +335,7 @@ None from this project. The node is reserved by another project's automation. It
 Open.
 - Workaround for the cache: it moved to `nnmc73` (`checkpoints/robotwin_logs/cache_qwen_nnmc73.sh`, `.venv-qwenimage-nnmc73`).
 - Cache writes are atomic, so the files written on `nnmc72` are valid.
-- RoboTwin evaluation (`plan.md` D6) needs another GPU host or this issue resolved.
+- RoboTwin evaluation runs on `nnmc71` instead (`plan.md` E2).
 
 # ISSUE-011
 
@@ -409,7 +409,7 @@ Open.
 
 # ISSUE-013
 
-Status: Open
+Status: Resolved
 
 Area: shared nodes (B300 nodes `nnmc73`–`nnmc76`), RoboTwin Qwen-Image-2.1 run
 
@@ -441,4 +441,4 @@ The way to finish the run is the user's decision:
 
 ## Resolution
 
-Open.
+The run is not continued (decision of 2026-10-19). The step-65,000 weights are the final Qwen-Image-2.1 model. They are copied to `nnmc71` and published (`docs/robotwin_training_results.md` → Published Weights). The standing order still excludes `nnmc73`–`nnmc76` (`PROJECT.md`).
