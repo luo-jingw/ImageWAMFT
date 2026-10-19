@@ -94,6 +94,14 @@ From the released `config.yaml` and `model.pt`:
   - The checkpoint loaded with 0 missing and 0 unexpected keys. Seeds were 4,300,000 and 4,300,001.
   - The worker config had seed 42, `instruction_type: unseen`, 10 denoising steps, horizon 16 and replan 16.
   - Run time: 2 min 14 s including model loading.
+- Worker config against training config (2026-10-19). The worker config is `sim_robotwin` with the overrides of `launch/robotwin_eval.sh`; FLUX.2 workers compose the `_clean_` task config. After interpolation, its `model` and `data.train` sections differ from the training `config.yaml` only in:
+  - `model.action_dit_pretrained_path` (none) and `model.skip_dit_load_from_pretrain` (true): all trained weights come from the checkpoint.
+  - `model.load_text_encoder` (true): the FLUX.2 worker encodes instructions itself. The Qwen-Image-2.1 factory has no such argument, and the policy drops keys its factory does not take.
+  - FLUX.2 `qwen_context_len` 512 against 128. The extra slots are masked padding, and the proprio token is placed right after the valid text tokens (`imagewam.py`, `pack_proprio_after_text`).
+  - Dataset selection, which the worker does not use: the `_clean_` episode filter, the non-idle filter and `pretrained_norm_stats`. The worker normalizes with `EVALUATION.dataset_stats_path`.
+  - Module names: the released config names `fastwam.*` modules.
+  - The released FLUX.2-4B, the FLUX.2-9B run, the Qwen-Image-2.1 run and the dataset have byte-identical `dataset_stats.json` files (SHA-256 `7a02c46c…`).
+  - Worker settings: seed 42, `instruction_type: unseen`, 10 denoising steps, horizon 16, replan 16, `compact_288x256`, text CFG scale 1.0, `sigma_shift` from the model config.
 
 ## Storage
 

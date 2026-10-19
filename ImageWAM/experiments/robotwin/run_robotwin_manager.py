@@ -224,12 +224,12 @@ def main(cfg: DictConfig):
         tasks = [t.strip() for t in str(task_name_cfg).split(",") if t.strip()]
 
     extra_overrides = _collect_worker_overrides()
+    resume = bool(cfg.MULTIRUN.get("resume", False))
 
     task_rates: dict[str, dict[str, float | None]] = {
         task: {"clean": None, "random": None} for task in tasks
     }
     failed_records: list[dict[str, Any]] = []
-    pending_tasks = deque(tasks)
     running_states: list[RunningState] = []
 
     phase_to_task_config = {
@@ -362,8 +362,34 @@ def main(cfg: DictConfig):
 
     log(
         f"manager start tasks={len(tasks)} gpu_ids={gpu_ids} "
-        f"max_tasks_per_gpu={max_tasks_per_gpu} phases={selected_phases} output_dir={run_output_dir}"
+        f"max_tasks_per_gpu={max_tasks_per_gpu} phases={selected_phases} output_dir={run_output_dir} "
+        f"resume={resume}"
     )
+
+    # The clean and random phases of a task append to the same task directory, so a task is either complete (a
+    # result file for every selected phase) or rerun from its first episode in a fresh directory.
+    existing_tasks = [task for task in tasks if (run_output_dir / task).exists()]
+    if existing_tasks and not resume:
+        raise FileExistsError(
+            f"{len(existing_tasks)} task directories already exist in {run_output_dir} (e.g. {existing_tasks[0]}); "
+            "pass MULTIRUN.resume=true or use a new EVALUATION.output_dir"
+        )
+    pending_tasks: deque[str] = deque()
+    for task in tasks:
+        task_dir = run_output_dir / task
+        result_files = {phase: task_dir / _phase_result_filename(phase) for phase in selected_phases}
+        if resume and all(path.exists() for path in result_files.values()):
+            for phase, path in result_files.items():
+                task_rates[task][phase] = _parse_success_rate(path)
+            log(f"resume: done task={task} " + " ".join(f"{p}={task_rates[task][p]:.4f}" for p in selected_phases))
+            continue
+        if task_dir.exists():
+            index = 0
+            while (run_output_dir / f"{task}.incomplete_{index}").exists():
+                index += 1
+            task_dir.rename(run_output_dir / f"{task}.incomplete_{index}")
+            log(f"resume: moved incomplete {task} to {task}.incomplete_{index}")
+        pending_tasks.append(task)
 
     # Launch initial tasks for each GPU up to capacity.
     for gpu_id in gpu_ids:

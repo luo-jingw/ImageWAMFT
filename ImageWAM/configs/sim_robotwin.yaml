@@ -47,6 +47,7 @@ MULTIRUN:
   gpu_ids: null
   max_tasks_per_gpu: 2
   phases: [clean, random]  # use [random] to evaluate only demo_randomized
+  resume: false  # true: keep tasks with all result files in EVALUATION.output_dir, rerun the others from scratch
 
 hydra:
   job:

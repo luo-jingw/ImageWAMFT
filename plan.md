@@ -159,7 +159,7 @@ Constraint check against this goal:
   - When true, each task is either `done` (its rates are read) or `pending`. A pending task's existing directory is renamed first.
   - With E6, `MULTIRUN.launch_interval_sec: float` (default 0).
 - **`launch/robotwin_eval_compare.py --result <name>=<run dir>[,<run dir>...] ... --reference launch/robotwin_table12_flux2_4b.csv --output <file.md>`:**
-  - Input: `summary.json` and `<task>/episode_end_states.jsonl` of each run directory.
+  - Input: `<task>/_result_{clean,random}.txt` and `<task>/episode_end_states.jsonl` of each run directory.
   - Typed records: `EpisodeRecord` (task, phase, seed, success, instruction, actions taken) and `TaskResult` (task, phase, success rate, episodes, run directory).
   - Output:
     - a per-task table (reference, then each model, clean and randomized) with means and standard errors;
@@ -220,7 +220,7 @@ Constraint check against this goal:
 
 ## Phase 1
 
-Phase Status: pending
+Phase Status: completed
 
 Round: 1
 
@@ -250,9 +250,15 @@ None.
 - The shard script assigns all 50 tasks once; the printed load per GPU is listed per node.
 - On the existing check run (`ImageWAM/evaluate_results/robotwin/model/smoke_2ep/`), the comparison script reports 2 clean episodes, seeds 4,300,000 and 4,300,001, and success 1.0.
 
+Result (2026-10-19):
+- `launch/robotwin_table12_flux2_4b.csv`: 50 tasks, all matching `_eval_step_limit.yml`; means 93.20 (clean) and 93.56 (randomized), as in the paper.
+- `launch/robotwin_eval_shards.py nnmc62=4 nnmc63=2 nnmc64=2 nnmc65=2 nnmc70=2` assigns 16, 8, 8, 9 and 9 tasks, with step-limit sums of 2,500–2,650 per GPU.
+- `launch/robotwin_eval_compare.py` on `smoke_2ep`: 2 clean episodes, seeds 4,300,000 and 4,300,001, success 1.0; the same directory given as two models gives a paired difference of 0 over 2 pairs.
+- The comparison reads the per-task result files, not `summary.json`, so it also reads runs that are still in progress.
+
 ## Phase 2
 
-Phase Status: pending
+Phase Status: completed
 
 Round: 1
 
@@ -282,9 +288,11 @@ In Phase 4, on a 2-task run:
 - a resumed run reads both tasks and launches none;
 - after one result file is removed, that task's directory is renamed and the task reruns with the same seeds and instructions as before.
 
+Result (2026-10-19): `MULTIRUN.resume` in the manager and `configs/sim_robotwin.yaml`. Without resume, the manager refuses an output directory that already holds task directories. The launcher accepts any node where `.venv-robotwin/bin/python` runs. The observation runs in Phase 4.
+
 ## Phase 3
 
-Phase Status: pending
+Phase Status: completed
 
 Round: 1
 
@@ -314,9 +322,11 @@ None.
 - Every difference is listed with its reason. Expected differences: paths, `load_text_encoder`, text slots (512 against 128), and the action-expert init path.
 - An unexplained difference in a key that changes the network or the preprocessing stops the plan.
 
+Result (2026-10-19): no unexplained difference; the list is in `docs/robotwin_training_setup.md` → Evaluation Protocol.
+
 ## Phase 4
 
-Phase Status: pending
+Phase Status: active
 
 Round: 2
 

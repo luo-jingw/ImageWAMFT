@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # RoboTwin 2.0 evaluation under the paper protocol (plan.md Goal 3; docs/robotwin_training_setup.md "Evaluation Protocol"):
 # 50 tasks, clean and randomized, seed 42, unseen instructions, 10 denoising steps, action horizon 16, replan 16,
-# 100 episodes per task. Runs the repository's evaluation manager with .venv-robotwin on nnmc71 or nnmc72.
+# 100 episodes per task. Runs the repository's evaluation manager with .venv-robotwin on one node: nnmc71, or an
+# L40S node with the project symlink and the uv CPython 3.11.13 (PROJECT.md). Several nodes split the tasks with
+# TASKS lists from launch/robotwin_eval_shards.py, each with its own OUTPUT_TAG (plan.md E5, E9).
 #
 #   MODEL=flux2_4b_release GPUS=4,5,6,7 bash launch/robotwin_eval.sh [hydra overrides]
 #   MODEL=flux2_9b CKPT=<run>/checkpoints/weights/step_XXXXXX.pt GPUS=4,5,6,7 bash launch/robotwin_eval.sh
@@ -18,12 +20,15 @@
 # EPISODES (default 100), PHASES (default [clean,random]), TASKS (comma list, default all 50 tasks),
 # MAX_TASKS_PER_GPU (default 3 for 4B, 2 otherwise), OUTPUT_TAG (results subdirectory name, default a timestamp).
 # Results: ImageWAM/evaluate_results/robotwin/<checkpoint tag>/<OUTPUT_TAG>/ (summary.csv, summary.json, manager.log).
+# Resume an interrupted run: the same command and OUTPUT_TAG plus MULTIRUN.resume=true (complete tasks are kept,
+# the others rerun from their first episode).
 set -euo pipefail
 PROJECT_ROOT=/home/user1/workspace/jingwu/ImageWAMFT
-case "$(hostname)" in
-  nnmc71|nnmc72) ;;
-  *) echo "run on nnmc71 or nnmc72 (.venv-robotwin is built for H100)" >&2; exit 2 ;;
-esac
+if ! "${PROJECT_ROOT}/.venv-robotwin/bin/python" -c "" 2>/dev/null; then
+  echo "${PROJECT_ROOT}/.venv-robotwin/bin/python does not run on $(hostname): it needs ${PROJECT_ROOT} (a symlink to" \
+    "/shared/user71/workspace/jingwu/ImageWAMFT off nnmc71) and the uv CPython 3.11.13" >&2
+  exit 2
+fi
 MODEL="${MODEL:?set MODEL=flux2_4b_release, flux2_9b or qwenimage21}"
 GPUS="${GPUS:?set GPUS, e.g. GPUS=4,5,6,7}"
 NUM_GPUS=$(awk -F, '{print NF}' <<< "${GPUS}")
