@@ -88,6 +88,8 @@ From the released `config.yaml` and `model.pt`:
 - Instruction draw: after `setup_demo(seed)` the loop fills templates with Python `random` and picks one with `np.random.choice`.
   - `setup_demo` reseeds numpy and torch but not Python `random` (`envs/_base_task.py` comments out `random.seed`).
   - An episode's instruction therefore depends on the process's earlier calls to `random`, not only on its seed.
+  - Nothing in the evaluation process seeds Python `random`: the ImageWAM policy does not either. The instruction of a given seed therefore differs between runs, even for the same model.
+  - cuRobo's graph planner (`envs/curobo/src/curobo/graph/prm.py`) also draws from Python `random`. The seeds that pass the expert check differ between processes. Example, `beat_block_hammer` clean, 5 episodes on L40S (2026-10-19): the released 4B kept seeds 4,300,000 + {0, 1, 2, 5, 6}, FLUX.2-9B {0, 2, 4, 5, 6} and Qwen-Image-2.1 {0, 1, 2, 4, 5}.
 - Text encoding: the FLUX.2 policy encodes each instruction online with its own Qwen3 encoder (`model.load_text_encoder=true`).
 - This project's pipeline (`launch/robotwin_eval.sh`, `.venv-robotwin`, PROJECT.md):
   - Checked on 2026-10-08 with the released FLUX.2-4B: `beat_block_hammer`, clean, 2 episodes on one `nnmc72` H100. Both succeeded.

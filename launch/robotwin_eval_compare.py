@@ -11,12 +11,16 @@ Inputs per run directory (one manager on one node): `<task>/_result_{clean,rando
 skipped.
 
 Checks, printed: every task of a model comes from exactly one run directory; the episode records agree with the
-result file; the seed lists and the instruction of each seed agree across models.
+result file; per pair of models and phase, how many seeds both ran and how many of those had the same instruction.
+The evaluation process never seeds Python `random`, which draws the instructions and is used by cuRobo's graph
+planner, so neither the instructions nor the seeds that pass the expert check are fixed by the seed
+(docs/robotwin_training_setup.md -> Evaluation Protocol).
 
 Statistics:
 - A model's mean is the mean of its per-task success rates; its standard error is sqrt(sum_t p_t (1 - p_t) / n_t) / T.
-- A paired difference between two models uses the episodes with the same (task, phase, seed). Per task it is the mean
-  of the per-episode differences; the standard error is sqrt(sum_t var_t / n_t) / T over the T tasks.
+- The difference between two models is the difference of their means, with standard error sqrt(se_a^2 + se_b^2).
+- The paired difference uses only the episodes with the same (task, phase, seed). Per task it is the mean of the
+  per-episode differences; the standard error is sqrt(sum_t var_t / n_t) / T over the T tasks.
 - Against the reference (100 trials per task), each task gets a two-proportion z with the pooled rate.
 """
 
@@ -144,17 +148,22 @@ def check_model(model: ModelResults) -> None:
 
 
 def check_pairs(models: list[ModelResults]) -> None:
-    base = models[0]
-    for other in models[1:]:
-        for key in sorted(set(base.results) & set(other.results)):
-            a, b = base.results[key], other.results[key]
-            seeds_a, seeds_b = [e.seed for e in a.episodes], [e.seed for e in b.episodes]
-            if seeds_a != seeds_b:
-                print(f"CHECK seeds differ {base.name} / {other.name} {key}: {len(set(seeds_a) ^ set(seeds_b))} unmatched")
-            inst_b = {e.seed: e.instruction for e in b.episodes}
-            differ = sum(1 for e in a.episodes if e.seed in inst_b and inst_b[e.seed] != e.instruction)
-            if differ:
-                print(f"CHECK instructions differ {base.name} / {other.name} {key}: {differ} of {len(a.episodes)} seeds")
+    for i, a in enumerate(models):
+        for b in models[i + 1 :]:
+            for phase in PHASES:
+                keys = sorted(k for k in set(a.results) & set(b.results) if k[1] == phase)
+                if not keys:
+                    continue
+                episodes = shared = same_instruction = same_lists = 0
+                for key in keys:
+                    seeds_a = [e.seed for e in a.results[key].episodes]
+                    inst_b = {e.seed: e.instruction for e in b.results[key].episodes}
+                    episodes += len(seeds_a)
+                    shared += sum(1 for s in seeds_a if s in inst_b)
+                    same_instruction += sum(1 for e in a.results[key].episodes if inst_b.get(e.seed) == e.instruction)
+                    same_lists += int(seeds_a == [e.seed for e in b.results[key].episodes])
+                print(f"pair {a.name} / {b.name} {phase}: {len(keys)} tasks, identical seed lists in {same_lists}; "
+                      f"{shared} of {episodes} seeds shared, {same_instruction} of those with the same instruction")
 
 
 def model_mean(model: ModelResults, tasks: list[str], phase: str) -> tuple[float, float, int]:
@@ -172,6 +181,8 @@ def paired_difference(a: ModelResults, b: ModelResults, tasks: list[str], phase:
     for task in tasks:
         success_b = {e.seed: e.success for e in b.results[(task, phase)].episodes}
         d = [float(e.success) - float(success_b[e.seed]) for e in a.results[(task, phase)].episodes if e.seed in success_b]
+        if not d:
+            continue
         mean = sum(d) / len(d)
         var = sum((x - mean) ** 2 for x in d) / (len(d) - 1) if len(d) > 1 else 0.0
         diffs.append(mean)
@@ -234,11 +245,15 @@ def main() -> None:
         lines += ["| " + " | ".join(mean_cells) + " |", ""]
 
         if len(models) > 1:
-            lines += ["| pair | difference (points) | episode pairs |", "|---|---|---|"]
+            lines += ["| pair | difference of means (points) | paired, shared seeds (points) | shared episodes |",
+                      "|---|---|---|---|"]
             for i, a in enumerate(models):
                 for b in models[i + 1 :]:
+                    mean_a, se_a, _ = model_mean(a, tasks, phase)
+                    mean_b, se_b, _ = model_mean(b, tasks, phase)
                     diff, se, pairs = paired_difference(b, a, tasks, phase)
-                    lines.append(f"| {b.name} − {a.name} | {100 * diff:+.2f} ± {100 * se:.2f} | {pairs} |")
+                    lines.append(f"| {b.name} − {a.name} | {100 * (mean_b - mean_a):+.2f} ± "
+                                 f"{100 * math.sqrt(se_a ** 2 + se_b ** 2):.2f} | {100 * diff:+.2f} ± {100 * se:.2f} | {pairs} |")
             lines.append("")
 
         if has_ref:

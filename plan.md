@@ -109,17 +109,17 @@ Constraint check against this goal:
 - **E4 Resume:** `MULTIRUN.resume=true`, rerun with the same `OUTPUT_TAG`.
   - A task with result files for all selected phases is read from those files and not rerun.
   - Any other existing task directory is renamed to `<task>.incomplete_<k>`, and the task reruns both phases from its first episode.
-  - The rerun gives the same seeds and instructions: each (task, phase) is a fresh process with seed 42, and the expert check that selects the seeds does not depend on the policy.
+  - The rerun uses the same protocol and seed range. It does not reproduce the instructions or the kept seeds exactly: Python `random` is never seeded in the evaluation process (E7).
 - **E5 Output names:** `OUTPUT_TAG` = `<model>_<step>_<node>`, e.g. `flux2_4b_release_nnmc62`, `qwenimage21_step065000_nnmc62`, `flux2_9b_step069900_nnmc71`. Each node writes its own directory, so the per-run files (`manager.log`, `summary.*`, `failed_tasks.txt`) never collide.
 - **E6 Workers per GPU (`MAX_TASKS_PER_GPU`):** fixed per model and GPU type in Phase 4 from measured values:
   - GPU memory per worker: 46 GB on L40S, 94 GB on H100. The GPU that holds the Qwen-Image-2.1 text server has less room.
   - Host memory while a worker loads. Each FLUX.2-9B worker reads the 54 GB weight file into host memory.
   - If simultaneous loads exceed free host memory, the manager starts workers at a fixed interval (`MULTIRUN.launch_interval_sec`).
   - If one FLUX.2-9B worker does not fit an L40S, FLUX.2-9B runs on `nnmc71` GPUs 0–3 only.
-- **E7 Paired comparison:**
-  - Episodes are paired by (task, phase, seed).
-  - The comparison reports each model's mean with its binomial standard error over the 5,000 episodes per setting, and the paired difference between models with its standard error.
-  - If instructions differ between models for the same seed, that is reported. The Python `random` state that draws them is not reseeded per episode.
+- **E7 Model comparison:**
+  - The evaluation process never seeds Python `random`. It draws the instructions and is used by cuRobo's graph planner. In the L40S smoke the three models kept different seed lists for the same task, and almost no shared seed had the same instruction. This is the upstream protocol, under which the paper's numbers were produced, so it is kept.
+  - The main comparison is the difference of means, with the binomial standard error over the 5,000 episodes per setting and model.
+  - A paired difference over the (task, phase, seed) triples both models ran is reported beside it.
 - **E8 Matched-step FLUX.2-9B (step 65,000):** not planned. It costs one more full evaluation and isolates the effect of the last 4,900 steps.
 - **E9 Sharding:**
   - The 50 tasks are split once into per-node subsets, in proportion to each node's GPUs and weighted by step limit.
@@ -164,7 +164,7 @@ Constraint check against this goal:
   - Output:
     - a per-task table (reference, then each model, clean and randomized) with means and standard errors;
     - a paired-difference table;
-    - printed checks: tasks per model (each exactly once), episodes per (task, phase), seed-list and instruction equality across models.
+    - printed checks: tasks per model (each exactly once), episodes per (task, phase), and per pair of models the shared seeds and instructions.
 - **`launch/robotwin_table12_flux2_4b.csv`:** columns `task,clean,random`, success in percent, using RoboTwin task names.
 
 ## Inputs
@@ -420,7 +420,7 @@ Phase 5 (gate passed).
 ### Observation
 
 - 100 episodes per (task, phase), every task once;
-- seed lists equal to the 4B run;
+- shared seeds with the 4B run;
 - wall-clock time; failed or resumed workers.
 
 ## Phase 7
@@ -484,7 +484,7 @@ Phases 4 (fit), 5 (gate) and 7 (final weights).
 ### Observation
 
 - 100 episodes per (task, phase), every task once;
-- seed lists equal to the 4B run;
+- shared seeds with the 4B run;
 - wall-clock time; failed or resumed workers.
 
 ## Phase 9
@@ -516,5 +516,5 @@ Phases 1, 6 and 8.
 ### Observation
 
 - Per-task and mean success of the three models, with standard errors.
-- Paired differences: FLUX.2-9B − 4B, Qwen-Image-2.1 − 4B, and Qwen-Image-2.1 − FLUX.2-9B.
+- Differences of means and paired differences on shared seeds: FLUX.2-9B − 4B, Qwen-Image-2.1 − 4B, and Qwen-Image-2.1 − FLUX.2-9B.
 - The step and clipping differences stated beside each comparison.
