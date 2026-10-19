@@ -31,6 +31,7 @@ Run changes:
   - On 2026-10-19, `config.yaml`, `dataset_stats.json`, `train.log`, `wandb/`, `eval/` and `checkpoints/weights/step_065000.pt` were copied to `nnmc71:checkpoints/robotwin_qwenimage21_imagewam/`. The weight file has the same SHA-256 on both nodes (`b55fcd47…3a834d`).
   - The weight file holds 594 bfloat16 tensors, all finite, with `step` 65,000. It loads into the model built from `config.yaml` with 0 missing and 0 unexpected keys (CPU check).
 - A move to the 8 `nnmc72` H100 was not possible: another project's eviction script kills this project's GPU processes there (ISSUE-010).
+- FLUX.2-9B was stopped on 2026-10-19 at 16:33 EDT, at step 66,590, and is not continued. Its step-65,000 weights are the final FLUX.2-9B model, so both trained models end at step 65,000 (learning rate 2.32e-6). `nnmc71` GPUs 0–3 then went to the RoboTwin evaluation.
 
 ## Training
 

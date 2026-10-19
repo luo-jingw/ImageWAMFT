@@ -16,7 +16,8 @@
 #   features are kept in checkpoints/robotwin_eval_text_cache/qwenimage21/.
 # GPUS: CUDA device indices; the evaluation worker sets CUDA_VISIBLE_DEVICES itself.
 # EPISODES (default 100), PHASES (default [clean,random]), TASKS (comma list, default all 50 tasks),
-# MAX_TASKS_PER_GPU (default 3 for 4B, 2 otherwise), OUTPUT_TAG (results subdirectory name, default a timestamp).
+# MAX_TASKS_PER_GPU (one number, or a list with one entry per GPU; default 3 for 4B, 2 for 9B, and for Qwen-Image-2.1
+# 2 on the text-server GPU and 3 on the others), OUTPUT_TAG (results subdirectory name, default a timestamp).
 # Results: ImageWAM/evaluate_results/robotwin/<checkpoint tag>/<OUTPUT_TAG>/ (summary.csv, summary.json, manager.log).
 # Resume an interrupted run: the same command and OUTPUT_TAG plus MULTIRUN.resume=true (complete tasks are kept,
 # the others rerun from their first episode).
@@ -67,7 +68,9 @@ case "${MODEL}" in
   qwenimage21)
     CKPT_PATH="${CKPT:?set CKPT to a weights file of the Qwen-Image-2.1 RoboTwin run}"
     DATASET_STATS_PATH="$(run_stats "${CKPT_PATH}")"
-    DEFAULT_TASKS_PER_GPU=2
+    # H100 smoke, 3 workers per GPU: 69-71 GB per GPU, 90.1 GB on the GPU with the text server (plan.md Phase 5),
+    # so that GPU takes one worker less.
+    DEFAULT_TASKS_PER_GPU="[2$(printf ',3%.0s' $(seq 2 "${NUM_GPUS}"))]"
     ;;
   *) echo "MODEL must be flux2_4b_release, flux2_9b or qwenimage21" >&2; exit 2 ;;
 esac

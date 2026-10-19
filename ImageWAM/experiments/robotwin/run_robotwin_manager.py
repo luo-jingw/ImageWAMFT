@@ -13,7 +13,7 @@ from typing import Any
 import hydra
 import yaml
 from hydra.core.hydra_config import HydraConfig
-from omegaconf import DictConfig
+from omegaconf import DictConfig, ListConfig
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 SINGLE_ENTRY = PROJECT_ROOT / "experiments" / "robotwin" / "eval_robotwin_single.py"
@@ -199,10 +199,18 @@ def main(cfg: DictConfig):
     num_gpus = int(cfg.MULTIRUN.num_gpus)
     if num_gpus <= 0:
         raise ValueError("`MULTIRUN.num_gpus` must be > 0.")
-    max_tasks_per_gpu = int(cfg.MULTIRUN.max_tasks_per_gpu)
-    if max_tasks_per_gpu <= 0:
-        raise ValueError("`MULTIRUN.max_tasks_per_gpu` must be > 0.")
     gpu_ids = _parse_gpu_ids(cfg.MULTIRUN.get("gpu_ids", None), num_gpus=num_gpus)
+    # One cap for every GPU, or one per entry of gpu_ids (e.g. fewer workers beside the Qwen-Image-2.1 text server).
+    raw_caps = cfg.MULTIRUN.max_tasks_per_gpu
+    if isinstance(raw_caps, ListConfig):
+        caps = [int(cap) for cap in raw_caps]
+        if len(caps) != len(gpu_ids):
+            raise ValueError(f"`MULTIRUN.max_tasks_per_gpu` has {len(caps)} entries for {len(gpu_ids)} GPUs.")
+    else:
+        caps = [int(raw_caps)] * len(gpu_ids)
+    if min(caps) <= 0:
+        raise ValueError("`MULTIRUN.max_tasks_per_gpu` must be > 0.")
+    max_tasks_per_gpu = dict(zip(gpu_ids, caps))
     selected_phases = _parse_eval_phases(cfg.MULTIRUN.get("phases", None))
 
     output_dir = _resolve_path(str(cfg.EVALUATION.output_dir), base=PROJECT_ROOT)
@@ -308,7 +316,7 @@ def main(cfg: DictConfig):
         return count
 
     def try_launch_pending(gpu_id: int) -> None:
-        while len(pending_tasks) > 0 and gpu_running_count(gpu_id) < max_tasks_per_gpu:
+        while len(pending_tasks) > 0 and gpu_running_count(gpu_id) < max_tasks_per_gpu[gpu_id]:
             task_name = pending_tasks.popleft()
             running_states.append(launch_phase(
                 task_name=task_name,

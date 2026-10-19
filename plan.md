@@ -2,9 +2,9 @@
 
 Plan Status: approved
 
-Approval: the user approved this plan on 2026-10-19. The evaluation runs on one node with 4 GPUs (E2).
+Approval: the user approved this plan on 2026-10-19. The evaluation runs on one node with 4 GPUs (E2). The FLUX.2-9B run was stopped the same day, so both trained models are evaluated at step 65,000 (E1), and Qwen-Image-2.1 is evaluated first (E3).
 
-The previous plan (RoboTwin 2.0 training of FLUX.2-9B and Qwen-Image-2.1, Phases 1–7) is in git history. Its training phase ends with Phase 4 below; its evaluation phases are replaced by this plan.
+The previous plan (RoboTwin 2.0 training of FLUX.2-9B and Qwen-Image-2.1, Phases 1–7) is in git history. Its training phase ends with Phase 6 below; its evaluation phases are replaced by this plan.
 
 # Problem
 
@@ -15,10 +15,10 @@ The previous plan (RoboTwin 2.0 training of FLUX.2-9B and Qwen-Image-2.1, Phases
   | Model | Weights | Steps | Text features at evaluation |
   |---|---|---|---|
   | Released FLUX.2-4B | `checkpoints/imagewam_release/robotwin/flux2_klein_4b/model.pt` | 69,900 | Qwen3-4B, in the worker |
-  | FLUX.2-9B | `checkpoints/robotwin_flux2_klein_9b_base_b384_imagewam/checkpoints/weights/step_069900.pt` (54 GB, LoRA-merged format) | 69,900 | Qwen3-8B, in the worker |
+  | FLUX.2-9B | `checkpoints/robotwin_flux2_klein_9b_base_b384_imagewam/checkpoints/weights/step_065000.pt` (54 GB, LoRA-merged format) | 65,000 of 69,900 | Qwen3-8B, in the worker |
   | Qwen-Image-2.1 | `checkpoints/robotwin_qwenimage21_imagewam/checkpoints/weights/step_065000.pt` (15.9 GB) | 65,000 of 69,900 | Qwen3-VL, from `qwen_text_server.py` |
 
-  - FLUX.2-9B runs on `nnmc71` GPUs 0–3: step 66,190 at 2026-10-19 14:20 EDT, 19.7 s per step, end about 2026-10-20 10:40 EDT.
+  - The FLUX.2-9B run was stopped on 2026-10-19 at 16:33 EDT, at step 66,590; its last saved weights are those of step 65,000.
   - Qwen-Image-2.1 stopped at step 67,110 (ISSUE-013). Its step-65,000 weights are the final model. They were copied from `nnmc73` to `nnmc71` with `config.yaml`, `dataset_stats.json`, `train.log`, `wandb/` and `eval/`; the weight file's SHA-256 is equal on both sides.
 - Evaluation pipeline (`PROJECT.md` → RoboTwin 2.0 evaluation environment; `docs/robotwin_training_setup.md` → Evaluation Protocol):
   - `.venv-robotwin`, the RoboTwin assets and `launch/robotwin_eval.sh` exist on `nnmc71`.
@@ -28,7 +28,7 @@ The previous plan (RoboTwin 2.0 training of FLUX.2-9B and Qwen-Image-2.1, Phases
   - The clean and randomized phases of a task share the task directory and its `episode_end_states.jsonl`. A record's phase is in its video file name (`randomized-true|false`).
   - Results go to `ImageWAM/evaluate_results/robotwin/<checkpoint file stem>/<OUTPUT_TAG>/`.
 - GPUs:
-  - `nnmc71` GPUs 0–3 (H100 NVL, 94 GB) are free once the FLUX.2-9B run ends. GPUs 4–7 hold another user's job.
+  - `nnmc71` GPUs 0–3 (H100 NVL, 94 GB) are free since the FLUX.2-9B run stopped. GPUs 4–7 are not used by this project.
   - `nnmc72` has the eviction script (ISSUE-010), and `nnmc73`–`nnmc76` the kill order (ISSUE-013).
 - Memory per worker, measured on L40S (46 GB):
   - FLUX.2-4B up to 24.5 GB;
@@ -46,7 +46,7 @@ No model trained here has a RoboTwin success rate, and the evaluation pipeline h
 ## Goal
 
 1. **Pipeline check:** the released FLUX.2-4B under the paper protocol. Its per-task and mean success are compared with paper Table 12 (93.20% clean, 93.56% randomized).
-2. **Trained models:** FLUX.2-9B at step 69,900 and Qwen-Image-2.1 at step 65,000 under the same protocol.
+2. **Trained models:** FLUX.2-9B and Qwen-Image-2.1, both at step 65,000, under the same protocol.
 3. **Results** in `docs/robotwin_training_results.md`:
    - per-task clean and randomized success of the three models, and their means with standard errors;
    - differences between models;
@@ -62,7 +62,7 @@ Out of scope: retraining or continuing any run, real-robot evaluation, and ISSUE
 
 Constraint check against this goal:
 - GPU policy: 4 GPUs of one node, within the 4-per-node limit (E2).
-- Qwen-Image-2.1 has 4,900 fewer steps. At step 65,000 the learning rate is 2.32e-6 (peak 1e-4, floor 1e-6). The step difference is stated with every comparison, as is gradient clipping 1.0 against the released model (previous plan D9).
+- Both trained models stop at step 65,000, 4,900 steps before the end of the schedule, where the learning rate is 2.32e-6 (peak 1e-4, floor 1e-6). The released 4B ran all 69,900 steps. This difference is stated with every comparison against the 4B, as is gradient clipping 1.0 (previous plan D9).
 - Text slots: the FLUX.2 workers encode instructions into 512 slots, while training used 128. The extra slots are masked padding, and the proprio token is placed right after the valid text tokens (`ImageWAM/src/imagewam/models/backbones/imagewam.py`, `pack_proprio_after_text`). The conditioning is therefore the same apart from numerics. Qwen-Image-2.1 is evaluated with 128 slots.
 - The Qwen-Image-2.1 evaluation features are encoded on an H100 (`.venv-qwenimage`). 66% of its training features were encoded on B300; the two differ by 2.2–2.6% relative L2 (`PROJECT.md`).
 - wandb is not used by evaluation. Raw data is only read.
@@ -85,18 +85,17 @@ Constraint check against this goal:
 ## Decisions
 
 - **E1 Checkpoints:** the three files in Current. Statistics come from each run directory's `dataset_stats.json`.
-- **E2 Host:** `nnmc71` GPUs 0–3 once the FLUX.2-9B run has ended. One node runs all three models.
+- **E2 Host:** `nnmc71` GPUs 0–3. One node runs all three models.
   - Its H100s hold every model, FLUX.2-9B included, which does not run reliably on a 46 GB L40S.
   - The evaluation environment was built there and needs no path changes.
   - Idleness is checked by the launcher right before each launch.
-- **E3 Order:** released 4B, then Qwen-Image-2.1, then FLUX.2-9B, each on all 4 GPUs.
-  - The 4B run is the gate. Its finished tasks are compared with Table 12 while it runs.
-  - A systematic deviation stops the queue and is recorded in `issues.md`. Example: most tasks below their Table 12 value by more than 3 binomial standard errors.
+- **E3 Order:** Qwen-Image-2.1, then the released 4B, then FLUX.2-9B, each on all 4 GPUs.
+  - The 4B run checks the pipeline against Table 12. A systematic deviation (example: most tasks below their Table 12 value by more than 3 binomial standard errors) is recorded in `issues.md` and stops the FLUX.2-9B run, and the Qwen-Image-2.1 result is not used until it is explained.
 - **E4 Resume:** `MULTIRUN.resume=true`, rerun with the same `OUTPUT_TAG`.
   - A task with result files for all selected phases is read from those files and not rerun.
   - Any other existing task directory is renamed to `<task>.incomplete_<k>`, and the task reruns both phases from its first episode.
   - The rerun uses the same protocol and seed range. It does not reproduce the instructions or the kept seeds exactly: Python `random` is never seeded in the evaluation process (E7).
-- **E5 Output names:** `OUTPUT_TAG` = `flux2_4b_release_full`, `qwenimage21_step065000_full`, `flux2_9b_step069900_full`.
+- **E5 Output names:** `OUTPUT_TAG` = `qwenimage21_step065000_full`, `flux2_4b_release_full`, `flux2_9b_step065000_full`.
 - **E6 Workers per GPU (`MAX_TASKS_PER_GPU`):** fixed per model in Phase 5 from measured values:
   - GPU memory per worker within 94 GB; the first GPU also holds the Qwen-Image-2.1 text server (about 17 GB);
   - host memory while workers load. Each FLUX.2-9B worker reads the 54 GB weight file into host memory.
@@ -105,7 +104,6 @@ Constraint check against this goal:
   - The evaluation process never seeds Python `random`. It draws the instructions and is used by cuRobo's graph planner. In the smoke runs the three models kept different seed lists for the same task, and almost no shared seed had the same instruction. This is the upstream protocol, under which the paper's numbers were produced, so it is kept.
   - The main comparison is the difference of means, with the binomial standard error over the 5,000 episodes per setting and model.
   - A paired difference over the (task, phase, seed) triples both models ran is reported beside it.
-- **E8 Matched-step FLUX.2-9B (step 65,000):** not planned. It costs one more full evaluation and isolates the effect of the last 4,900 steps.
 
 ## Responsibilities
 
@@ -132,7 +130,7 @@ Constraint check against this goal:
 - **Manager:** `MULTIRUN.resume: bool` (default `false`, `configs/sim_robotwin.yaml`).
   - When true, each task is either `done` (its rates are read) or `pending`. A pending task's existing directory is renamed first.
   - Without resume, an output directory that already holds task directories is refused.
-  - With E6, `MULTIRUN.launch_interval_sec: float` (default 0).
+  - `MULTIRUN.max_tasks_per_gpu`: one cap for every GPU, or a list with one cap per entry of `gpu_ids`.
 - **`launch/robotwin_eval_compare.py --result <name>=<run dir> ... --reference launch/robotwin_table12_flux2_4b.csv --output <file.md>`:**
   - Input: `<task>/_result_{clean,random}.txt` and `<task>/episode_end_states.jsonl` of each run directory.
   - Typed records: `EpisodeRecord` (task, phase, seed, success, instruction, actions taken) and `TaskResult` (task, phase, success rate, episodes, run directory).
@@ -159,11 +157,12 @@ Per model: an evaluation directory with `summary.json`, `summary.csv`, `manager.
 # Flow
 
 1. CPU only: the Table 12 reference and the comparison script; resume in the manager; the evaluation config check.
-2. When the FLUX.2-9B run ends (about 2026-10-20 10:40 EDT): check the final weights and write the training section.
-3. Smoke on `nnmc71` GPUs 0–3: each model with 1–3 workers per GPU on randomized scenes. Measure GPU and host memory and episode time, check resume, and fix `MAX_TASKS_PER_GPU` per model.
-4. Released 4B, full protocol; compare with Table 12 (gate, E3).
-5. Qwen-Image-2.1, full protocol; then FLUX.2-9B, full protocol.
-6. Run the comparison script; write the evaluation section.
+2. Smoke of Qwen-Image-2.1 on `nnmc71` GPUs 0–3 with 3 workers per GPU on randomized scenes; fix its workers per GPU.
+3. Qwen-Image-2.1, full protocol.
+4. Training section of both runs.
+5. Released 4B, full protocol; compare with Table 12 (E3).
+6. FLUX.2-9B: short memory check of 2 workers per GPU, then the full protocol.
+7. Run the comparison script; write the evaluation section.
 
 # Code Mapping
 
@@ -171,7 +170,7 @@ Per model: an evaluation directory with `summary.json`, `summary.csv`, `manager.
 |---|---|
 | Paper reference | `launch/robotwin_table12_flux2_4b.csv` |
 | Comparison | `launch/robotwin_eval_compare.py` |
-| Resume (and launch interval, if E6 needs it) | `ImageWAM/experiments/robotwin/run_robotwin_manager.py`, `ImageWAM/configs/sim_robotwin.yaml` |
+| Resume, per-GPU worker caps | `ImageWAM/experiments/robotwin/run_robotwin_manager.py`, `ImageWAM/configs/sim_robotwin.yaml` |
 | Host and GPU check, workers per GPU | `launch/robotwin_eval.sh` |
 | Text server memory | `ImageWAM/scripts/qwenimage21/qwen_text_server.py` |
 | Evaluation config check, protocol facts | `docs/robotwin_training_setup.md` (Evaluation Protocol) |
@@ -288,17 +287,87 @@ Result (2026-10-19): no unexplained difference; the list is in `docs/robotwin_tr
 
 ## Phase 4
 
-Phase Status: pending
+Phase Status: completed
 
 Round: 2
 
 ### Goal
 
-Close the training runs: the FLUX.2-9B run reaches step 69,900, and both runs' training results are recorded.
+Smoke of Qwen-Image-2.1 on `nnmc71` GPUs 0–3; its workers per GPU (E6).
 
 ### Files
 
-`docs/robotwin_training_results.md` (Runs, Training), `PROJECT.md` (`nnmc71` GPUs 0–3 free).
+`ImageWAM/experiments/robotwin/run_robotwin_manager.py`, `ImageWAM/configs/sim_robotwin.yaml` (per-GPU caps); `launch/robotwin_eval.sh` (Qwen-Image-2.1 default).
+
+### Structures
+
+Per-GPU worker caps.
+
+### Affected Modules
+
+Manager, launcher.
+
+### Dependencies
+
+Phases 2 and 3.
+
+### Observation
+
+Peak GPU memory per GPU, host memory, GPU utilization, episode time and success with 3 workers per GPU on randomized scenes.
+
+Result (2026-10-19, `smoke_h100_qwen_w3`):
+- 12 tasks × 5 randomized episodes, 12 workers, 12.9 min, no failure; success 60–100% per task.
+- Peak GPU memory: 90.1 GB on GPU 0 (text server and 3 workers), 69.5–71.4 GB on GPUs 1–3. Mean GPU utilization 17–50%. Host memory available stayed above 610 GB.
+- About 61 worker-seconds per episode with 3 workers per GPU, against 10–19 s for a lone worker on L40S, so the full run projects to about 14–16 h with 11 workers.
+- Workers per GPU: 2 on the text-server GPU and 3 on the others (`MULTIRUN.max_tasks_per_gpu=[2,3,3,3]`, the launcher default for Qwen-Image-2.1).
+
+## Phase 5
+
+Phase Status: active
+
+Round: 3
+
+### Goal
+
+Qwen-Image-2.1 (step 65,000) under the full protocol.
+
+### Files
+
+None. The output is `ImageWAM/evaluate_results/robotwin/step_065000/qwenimage21_step065000_full/`.
+
+### Structures
+
+None.
+
+### Affected Modules
+
+Evaluation.
+
+### Dependencies
+
+Phases 1 and 4.
+
+### Observation
+
+- 100 episodes per (task, phase), clean and randomized, for all 50 tasks;
+- per-task and mean success;
+- wall-clock time, peak GPU memory, failed or resumed workers.
+
+Started 2026-10-19 16:49 EDT in tmux `imagewamft_eval_qwen`, log `checkpoints/robotwin_logs/eval_qwen_full.log`.
+
+## Phase 6
+
+Phase Status: pending
+
+Round: 4
+
+### Goal
+
+Training section of both runs.
+
+### Files
+
+`docs/robotwin_training_results.md` (Runs, Training).
 
 ### Structures
 
@@ -310,50 +379,14 @@ Results.
 
 ### Dependencies
 
-None. It runs when the FLUX.2-9B run ends, about 2026-10-20 10:40 EDT.
-
-### Observation
-
-- `step_069900.pt` exists, with `step` 69,900 and only finite values.
-- Loss and validation curves of both runs, with duplicate steps removed across the two FLUX.2-9B wandb runs (the newer run for steps 40,001–42,150).
-- Final validation metrics of both runs, and wall-clock time.
-
-## Phase 5
-
-Phase Status: pending
-
-Round: 3
-
-### Goal
-
-Smoke of the three models on `nnmc71` GPUs 0–3; `MAX_TASKS_PER_GPU` per model (E6).
-
-### Files
-
-`launch/robotwin_eval.sh` (per-model defaults); the manager launch interval only if E6 requires it.
-
-### Structures
-
 None.
 
-### Affected Modules
-
-Launcher, manager.
-
-### Dependencies
-
-Phase 4 (free GPUs).
-
 ### Observation
 
-Per model, with 1 to 3 workers per GPU on 20 randomized episodes of `pick_diverse_bottles`:
-- peak GPU memory per GPU; peak host memory while loading;
-- episode time and GPU utilization;
-- success.
+- Loss and validation curves of both runs up to their stops, with duplicate steps removed across the two FLUX.2-9B wandb runs (the newer run for steps 40,001–42,150).
+- Validation metrics around step 65,000 for both runs, and wall-clock time.
 
-Also the projected wall-clock time of each full run.
-
-## Phase 6
+## Phase 7
 
 Phase Status: pending
 
@@ -361,7 +394,7 @@ Round: 4
 
 ### Goal
 
-Released FLUX.2-4B under the full protocol, compared with Table 12 (gate, E3).
+Released FLUX.2-4B under the full protocol, compared with Table 12 (E3).
 
 ### Files
 
@@ -377,14 +410,14 @@ Evaluation.
 
 ### Dependencies
 
-Phases 1 and 5.
+Phase 5 (GPUs).
 
 ### Observation
 
 - Per-task and mean success, clean and randomized, against Table 12, with the per-task difference in binomial standard errors.
-- Wall-clock time; failed or resumed workers.
+- Peak GPU memory with 3 workers per GPU; wall-clock time; failed or resumed workers.
 
-## Phase 7
+## Phase 8
 
 Phase Status: pending
 
@@ -392,11 +425,11 @@ Round: 5
 
 ### Goal
 
-Qwen-Image-2.1 (step 65,000), then FLUX.2-9B (step 69,900), under the full protocol.
+FLUX.2-9B (step 65,000) under the full protocol.
 
 ### Files
 
-None. The outputs are evaluation directories.
+`launch/robotwin_eval.sh` (FLUX.2-9B default workers per GPU, from the memory check).
 
 ### Structures
 
@@ -408,15 +441,14 @@ Evaluation.
 
 ### Dependencies
 
-Phase 6 (gate passed).
+Phase 7 (pipeline check passed).
 
 ### Observation
 
-- 100 episodes per (task, phase) for both models;
-- shared seeds with the 4B run;
-- wall-clock time; failed or resumed workers.
+- Memory check: peak GPU memory with 2 workers per GPU on randomized scenes.
+- 100 episodes per (task, phase), per-task and mean success; wall-clock time; failed or resumed workers.
 
-## Phase 8
+## Phase 9
 
 Phase Status: pending
 
@@ -440,10 +472,10 @@ Results.
 
 ### Dependencies
 
-Phases 1 and 7.
+Phases 1, 5, 7 and 8.
 
 ### Observation
 
 - Per-task and mean success of the three models, with standard errors.
 - Differences of means and paired differences on shared seeds: FLUX.2-9B − 4B, Qwen-Image-2.1 − 4B, and Qwen-Image-2.1 − FLUX.2-9B.
-- The step and clipping differences stated beside each comparison.
+- The step and clipping differences against the 4B stated beside each comparison.
