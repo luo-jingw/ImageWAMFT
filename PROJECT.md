@@ -84,7 +84,7 @@ FLUX.2-klein-base-4B, the backbone the paper reports for its real-world experime
   - The serving packages of `.venv` (gradio, websockets) are not installed.
   - Assets: `TianxingChen/RoboTwin2.0` (`background_texture`, `embodiments`, `objects`; 16 GB) are unpacked in the git-ignored `ImageWAM/third_party/RoboTwin/assets/`. `script/update_embodiment_config_path.py` wrote the absolute `/home/user1/workspace/jingwu/ImageWAMFT/...` asset paths into the embodiment configs; they resolve on `nnmc72` through its symlink.
   - Vulkan: `vulkaninfo` lists the H100 GPUs on `nnmc71` and `nnmc72`.
-  - L40S nodes: `nnmc62`, `nnmc63`, `nnmc64` and `nnmc65` got the symlink `/home/user1/workspace/jingwu/ImageWAMFT -> /shared/user71/workspace/jingwu/ImageWAMFT` on 2026-10-19; `nnmc70` has had it since 2026-10-05. On these five nodes, `.venv-robotwin` (torch 2.7.1+cu126 with CUDA available, sapien 3.0.0b1) and `.venv-qwenimage` import. They have the uv CPython 3.11.13, driver 580.159.03, the NVIDIA Vulkan ICD and a system FFmpeg. Remove the symlink to undo.
+  - On `nnmc62` and `nnmc64` (2026-10-19) one of the 8 GPUs is not visible to CUDA, so CUDA indices above it differ from `nvidia-smi` indices (`nnmc64`: CUDA 6 is `nvidia-smi` 7). `launch/robotwin_eval.sh` resolves each CUDA index to its UUID before its GPU check.
   - The tracked symlink `ImageWAM/third_party/RoboTwin/policy/imagewam_policy` pointed to the authors' cluster path; it now points to `../../../experiments/robotwin/imagewam_policy`.
 - Qwen3-VL text features on B300: `.venv-qwenimage-nnmc73` (`nnmc73`).
   - Built by `node_env/build_venv_qwenimage_nnmc73.sh` with the `nnmc73` uv CPython 3.11.15.

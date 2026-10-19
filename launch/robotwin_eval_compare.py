@@ -1,11 +1,12 @@
-"""Merges RoboTwin evaluation runs per model and writes the comparison tables (plan.md E7, E9).
+"""Reads the RoboTwin evaluation runs of several models and writes the comparison tables (plan.md E7).
 
   .venv/bin/python launch/robotwin_eval_compare.py \
-      --result flux2_4b=ImageWAM/evaluate_results/robotwin/model/flux2_4b_release_nnmc62,... \
-      --result qwenimage21=<run dir>,<run dir> \
+      --result flux2_4b=ImageWAM/evaluate_results/robotwin/model/flux2_4b_release_full \
+      --result qwenimage21=ImageWAM/evaluate_results/robotwin/step_065000/qwenimage21_step065000_full \
       --reference launch/robotwin_table12_flux2_4b.csv --output <file.md>
 
-Inputs per run directory (one manager on one node): `<task>/_result_{clean,random}.txt` and
+A model may list several run directories separated by commas; each task must then come from exactly one of them.
+Inputs per run directory (one manager run): `<task>/_result_{clean,random}.txt` and
 `<task>/episode_end_states.jsonl`. The clean and randomized phases of a task share that file; a record's phase is the
 `randomized-true|false` part of its video file name. Directories renamed by a resume (`<task>.incomplete_<k>`) are
 skipped.

@@ -104,6 +104,11 @@ From the released `config.yaml` and `model.pt`:
   - Module names: the released config names `fastwam.*` modules.
   - The released FLUX.2-4B, the FLUX.2-9B run, the Qwen-Image-2.1 run and the dataset have byte-identical `dataset_stats.json` files (SHA-256 `7a02c46c…`).
   - Worker settings: seed 42, `instruction_type: unseen`, 10 denoising steps, horizon 16, replan 16, `compact_288x256`, text CFG scale 1.0, `sigma_shift` from the model config.
+- Smoke on L40S (46 GB, `nnmc62` and `nnmc64`, 2026-10-19), one worker per GPU:
+  - `beat_block_hammer`, clean and randomized, 5 episodes each: all 30 episodes of the three models succeeded, with 0 missing and 0 unexpected checkpoint keys. A successful episode of about 105 actions took 10–19 s; starting a phase (process start and model loading) took about 70–100 s.
+  - Peak GPU memory per worker: FLUX.2-4B 24.5 GB, FLUX.2-9B 43.6 GB, Qwen-Image-2.1 about 24 GB.
+  - On 20 randomized `pick_diverse_bottles` episodes, FLUX.2-4B succeeded in 18. FLUX.2-9B lost its Vulkan device (`OIDN Error: unspecified launch failure`, then `vk::DeviceLost`). Qwen-Image-2.1 with the text server on the same GPU failed with `cannot create buffer`.
+  - The Qwen-Image-2.1 text server held 30.2 GB with the full pipeline on the GPU. Loading it without the 7B transformer gives bitwise-identical features for 3 test prompts, and `qwen_text_server.py` does so.
 
 ## Storage
 
