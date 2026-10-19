@@ -26,6 +26,7 @@ Run changes:
   - The resumed run read the same samples as the first run. Over steps 40,001–42,150, training loss is 0.0790 resumed against 0.0806 originally (action 0.0029 against 0.0028). The 7 validations from step 40,500 to 43,500 average `action_l1` 0.0127 and PSNR 28.6 dB, against 0.0122 ± 0.0052 and 27.5 ± 1.9 dB for the first run's validations at steps 38,000–42,000.
   - The logged `train/grad_norm` is 2.0× the first run's over the same steps (ISSUE-012).
   - The first 4-rank state (step 45,000, saved 2026-10-14 17:54 EDT, 132 GB) was read back: 4 shards with 11 optimizer groups each, largest partition 249,237,952 elements, no non-finite value in the fp32 weights or Adam moments, Adam step 45,000, learning rate 3.155e-5 (the cosine schedule with its 1e-6 floor). The converted step-40,000 state was then deleted; the 8-rank step-40,000 state had been pruned by the step-45,000 save.
+- Qwen-Image-2.1 was killed at step 67,110 on 2026-10-18 07:53 EDT by the owner of the `nnmc_ww` jobs that share `nnmc73` (ISSUE-013). Its last saved state is step 65,000.
 - A move to the 8 `nnmc72` H100 was not possible: another project's eviction script kills this project's GPU processes there (ISSUE-010).
 
 ## Training

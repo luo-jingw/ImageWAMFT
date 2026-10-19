@@ -406,3 +406,39 @@ Short smoke runs from the same state with ZeRO-2 on 4 GPUs at accumulation 12 an
 
 Open.
 
+
+# ISSUE-013
+
+Status: Open
+
+Area: shared nodes (B300 nodes `nnmc73`–`nnmc76`), RoboTwin Qwen-Image-2.1 run
+
+## Observation
+
+The RoboTwin Qwen-Image-2.1 run stopped at step 67,110 of 69,900 on 2026-10-18 at 11:53:19 UTC (07:53 EDT). All eight ranks (PIDs 3482169–3482176) exited with SIGTERM; the accelerate launcher itself received no signal. The last saved state and weights are at step 65,000 (8 ranks).
+
+## Impact
+
+- 2,110 trained steps after the step-65,000 state are lost. 4,900 steps remain from that state.
+- While the standing order below holds, a job of this project on `nnmc73`–`nnmc76` is killed.
+- The FLUX.2-9B run on `nnmc71` is not affected.
+
+## Evidence
+
+- `/shared/user57/workspace/nnmc_ww/infra/live.md` holds the operating notes of the `nnmc_ww` jobs that share `nnmc73` (ISSUE-011). They record that the eight PIDs were killed at 04:5x PDT on 2026-10-18 on that project owner's order.
+- The same notes record a standing order from that owner: an ImageWAM job that appears again on a B300 node (`nnmc73`–`nnmc76`) is killed there. Their watcher `foreign_watch_73_74_75.sh` polls `nnmc73`–`nnmc75` every 120 s.
+
+## Hypotheses
+
+None; the cause is recorded by the sender.
+
+## Next Experiment
+
+The way to finish the run is the user's decision:
+- resume from the step-65,000 state on `nnmc71` after the FLUX.2-9B run ends;
+- agree on `nnmc73` time with the `nnmc_ww` owner;
+- stop at step 65,000.
+
+## Resolution
+
+Open.
