@@ -15,7 +15,7 @@ The previous plan (RoboTwin 2.0 training of FLUX.2-9B and Qwen-Image-2.1, Phases
   | Model | Weights | Steps | Text features at evaluation |
   |---|---|---|---|
   | Released FLUX.2-4B | `checkpoints/imagewam_release/robotwin/flux2_klein_4b/model.pt` | 69,900 | Qwen3-4B, in the worker |
-  | FLUX.2-9B | `checkpoints/robotwin_flux2_klein_9b_base_b384_imagewam/checkpoints/weights/step_065000.pt` (54 GB, LoRA-merged format) | 65,000 of 69,900 | Qwen3-8B, in the worker |
+  | FLUX.2-9B | `checkpoints/robotwin_flux2_klein_9b_base_b384_imagewam/checkpoints/weights/step_065000.pt` (38.9 GB, LoRA-merged format) | 65,000 of 69,900 | Qwen3-8B, in the worker |
   | Qwen-Image-2.1 | `checkpoints/robotwin_qwenimage21_imagewam/checkpoints/weights/step_065000.pt` (15.9 GB) | 65,000 of 69,900 | Qwen3-VL, from `qwen_text_server.py` |
 
   - The FLUX.2-9B run was stopped on 2026-10-19 at 16:33 EDT, at step 66,590; its last saved weights are those of step 65,000.
@@ -96,7 +96,7 @@ Constraint check against this goal:
 - **E5 Output names:** `OUTPUT_TAG` = `qwenimage21_step065000_full`, `flux2_4b_release_full`, `flux2_9b_step065000_full`.
 - **E6 Workers per GPU (`MAX_TASKS_PER_GPU`):** fixed per model in Phase 5 from measured values:
   - GPU memory per worker within 94 GB; the first GPU also holds the Qwen-Image-2.1 text server (about 17 GB);
-  - host memory while workers load. Each FLUX.2-9B worker reads the 54 GB weight file into host memory.
+  - host memory while workers load. Each FLUX.2-9B worker reads the 38.9 GB weight file into host memory.
   - If simultaneous loads exceed free host memory, the manager starts workers at a fixed interval (`MULTIRUN.launch_interval_sec`).
 - **E7 Model comparison:**
   - The evaluation process never seeds Python `random`. It draws the instructions and is used by cuRobo's graph planner. In the smoke runs the three models kept different seed lists for the same task, and almost no shared seed had the same instruction. This is the upstream protocol, under which the paper's numbers were produced, so it is kept.
@@ -395,7 +395,7 @@ Result: `docs/robotwin_training_results.md` → Training, and the final-weights 
 
 ## Phase 7
 
-Phase Status: active
+Phase Status: completed
 
 Round: 4
 
@@ -425,11 +425,14 @@ Phase 5 (GPUs).
 - Peak GPU memory with 3 workers per GPU; wall-clock time; failed or resumed workers.
 - `open_microwave` clean success per microwave model (ISSUE-014).
 
-Started 2026-10-20 04:59 EDT in tmux `imagewamft_eval_4b`, log `checkpoints/robotwin_logs/eval_4b_full.log`, 12 workers (3 per GPU). The output is `ImageWAM/evaluate_results/robotwin/model/flux2_4b_release_full/`.
+Result (`docs/robotwin_evaluation_results.md`):
+- Ran from 2026-10-20 04:59 to 16:23 EDT (11.4 h) in tmux `imagewamft_eval_4b`, log `checkpoints/robotwin_logs/eval_4b_full.log`; 12 workers (3 per GPU), no worker failed, no resume. Peak GPU memory 76.7–78.3 GB per GPU.
+- Mean success 93.46 ± 0.33 clean and 93.36 ± 0.33 randomized against Table 12's 93.20 and 93.56, and no task beyond 3 binomial standard errors of Table 12: the pipeline check passed (E3), so the Qwen-Image-2.1 result stands and FLUX.2-9B runs.
+- `open_microwave` clean: 93, with 47 of 51 base1 episodes (ISSUE-014).
 
 ## Phase 8
 
-Phase Status: pending
+Phase Status: active
 
 Round: 5
 

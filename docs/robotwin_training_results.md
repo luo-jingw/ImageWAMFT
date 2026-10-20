@@ -16,7 +16,7 @@ Training runs of the FLUX.2-9B and Qwen-Image-2.1 models. Their RoboTwin evaluat
 | Started | 2026-10-08 17:32 EDT | 2026-10-08 20:45 EDT |
 | Measured speed | 9.9 s per step on 8 GPUs (steps 620–1,120, one evaluation included); 19.8 s per step on 4 GPUs (steps 42,500–48,460, evaluations included) | 4.2 s per step (steps 30–130) |
 | Peak GPU memory | 76.6 GB on 8 GPUs; 88.2 GB used per GPU on 4 GPUs (`nvidia-smi`) | 55.3 GB |
-| Weights | every 5,000 steps and at the end, 54 GB each | every 5,000 steps and at the end, 15.9 GB each |
+| Weights | every 5,000 steps: 57.6 GB each up to step 40,000 (8-GPU run), 38.9 GB from step 45,000 (4-GPU run); step 65,000 loads with 0 missing and 0 unexpected keys | every 5,000 steps and at the end, 15.9 GB each |
 | Final weights | step 65,000 | step 65,000 |
 | Wall clock, first logged step to step 65,000 | 254.2 h (2026-10-08 17:37 – 10-19 07:47 EDT), including steps 40,001–42,150 trained twice | 206.2 h (2026-10-08 20:51 – 10-17 11:05 EDT): 4.07 s per step up to step 45,000 (50.9 h), 8.38 s over steps 45,001–50,000 and 33.3–36.3 s from step 50,001 on, while the `nnmc73` GPUs were shared (ISSUE-011) |
 
