@@ -363,7 +363,7 @@ Result:
 
 ## Phase 6
 
-Phase Status: pending
+Phase Status: completed
 
 Round: 4
 
@@ -391,6 +391,8 @@ None.
 
 - Loss and validation curves of both runs up to their stops, with duplicate steps removed across the two FLUX.2-9B wandb runs (the newer run for steps 40,001–42,150).
 - Validation metrics around step 65,000 for both runs, and wall-clock time.
+
+Result: `docs/robotwin_training_results.md` → Training, and the final-weights and wall-clock rows of Runs. Done while the Phase 7 run occupied the GPUs.
 
 ## Phase 7
 
