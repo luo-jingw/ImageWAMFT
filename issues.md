@@ -452,34 +452,59 @@ Area: RoboTwin evaluation, Qwen-Image-2.1 on `open_microwave` clean
 
 ## Observation
 
-Qwen-Image-2.1 (step 65,000) succeeds in 47 of 100 clean `open_microwave` episodes, against 97% for FLUX.2-4B in paper Table 12. Its randomized success is 89 (Table 12: 94).
+Qwen-Image-2.1 (step 65,000) succeeds in 47 of 100 clean `open_microwave` episodes, against 97% for FLUX.2-4B in paper Table 12 and 93% for the released FLUX.2-4B under this project's pipeline. Its randomized success is 89 (Table 12: 94; released FLUX.2-4B here: 92).
 
 ## Impact
 
-- The clean mean of Qwen-Image-2.1 loses 1.0 point on this task alone.
+- The clean mean of Qwen-Image-2.1 loses about 1 point on this task alone.
 - 53 failed episodes run to the 1,500-action limit, so this (task, phase) took 206 min, the longest of the run.
 
 ## Evidence
 
-- Results: `ImageWAM/evaluate_results/robotwin/step_065000/qwenimage21_step065000_full/open_microwave/`.
+- Results: `ImageWAM/evaluate_results/robotwin/step_065000/qwenimage21_step065000_full/open_microwave/` and `ImageWAM/evaluate_results/robotwin/model/flux2_4b_release_full/open_microwave/`.
 - The task draws one of two microwave models (`envs/open_microwave.py`, `model_id` 0 or 1). The unseen instructions name the model (`description/objects_description/044_microwave/base{0,1}.json`). Success per model:
 
   | | base0 (gray and yellow, top vents) | base1 (dark gray, slanted walls) |
   |---|---|---|
-  | clean | 41 / 48 | 6 / 52 |
-  | randomized | 46 / 47 | 43 / 53 |
+  | Qwen-Image-2.1, clean | 41 / 48 | 6 / 52 |
+  | Qwen-Image-2.1, randomized | 46 / 47 | 43 / 53 |
+  | released FLUX.2-4B, clean | 46 / 49 | 47 / 51 |
+  | released FLUX.2-4B, randomized | 46 / 46 | 46 / 54 |
 
-- All 53 clean failures end at the 1,500-action limit; successes take 153–438 actions.
-- Last frame of clean episode 14 (base1, failed): the door is partly open, below the success threshold of 60% of the joint limit (`check_success`), and the arm no longer moves it.
+- Same scenes: the two runs share 89 clean seeds, and each shared seed draws the same microwave model in both. On the 47 shared clean base1 seeds, FLUX.2-4B succeeds 43 times and Qwen-Image-2.1 6 times; 37 seeds succeed with FLUX.2-4B only, none with Qwen-Image-2.1 only.
+- Instruction text: each of the three unseen base1 descriptions fails in clean scenes and succeeds in randomized ones with Qwen-Image-2.1:
+
+  | Description | Clean | Randomized |
+  |---|---|---|
+  | dark gray microwave | 1 / 18 | 10 / 14 |
+  | kitchen microwave with slanted shape | 0 / 11 | 13 / 15 |
+  | medium-sized microwave with angled walls | 5 / 23 | 20 / 24 |
+
+- Episode length: successful episodes take a median of 168 (Qwen-Image-2.1) and 180 (FLUX.2-4B) actions on base0 in clean scenes, and 224 actions with FLUX.2-4B on base1. Qwen-Image-2.1's base1 successes take 422 (clean, 6 episodes) and 366 (randomized) actions.
+- Failure mode, from the head and left-wrist camera frames of six failed clean base1 episodes (seeds 4,300,002, 4,300,007, 4,300,008, 4,300,010, 4,300,022, 4,300,028):
+  - up to about action 180 the motion matches FLUX.2-4B on the same seed: the left gripper reaches and grasps the handle and the door starts to open;
+  - at about actions 190–230 the handle leaves the gripper while the door is partly open (clear in five of the six);
+  - the arm then moves away from the door, and both arms end in poses absent from successful episodes. All 53 clean failures end at the 1,500-action limit.
+- Training data (`dataset/robotwin2.0/robotwin2.0/meta/episodes.jsonl`, episodes 9,350–9,899, classified by the `seen` object descriptions in their task strings):
+
+  | | base0 | base1 |
+  |---|---|---|
+  | clean episodes | 43 | 7 |
+  | randomized episodes | 333 | 167 |
+  | median length, frames at 50 fps | 431 | 779 (clean), 728 (randomized) |
 
 ## Hypotheses
 
-- The model fails on base1 in clean scenes specifically. The same microwave in randomized scenes succeeds 43 of 53 times.
-- An evaluation pipeline difference affects this (task, phase). The released FLUX.2-4B run under the same pipeline separates the two.
+- Ruled out: the evaluation pipeline (FLUX.2-4B reaches 93 clean under it) and the instruction text alone (the same base1 descriptions succeed in randomized scenes).
+- Base1 needs a longer pull than base0, and clean scenes have 7 base1 demonstrations against 43 for base0. Qwen-Image-2.1 releases the base1 handle at about the point where a base0 episode would be done, which matches following the base0 motion in clean scenes. FLUX.2-4B generalizes from the 167 randomized base1 demonstrations; Qwen-Image-2.1 does not.
+- The difference between the two models may come from the backbone (latent space, text encoder), from the shorter schedule (65,000 of 69,900 steps) and gradient clipping, or from run-to-run variance. The data above do not separate these.
 
 ## Next Experiment
 
-The released FLUX.2-4B full run (`plan.md` Phase 7): its `open_microwave` clean success, split per microwave model as above. A result near Table 12 (97) points to the Qwen-Image-2.1 model; a base1 failure there too points to the pipeline.
+All on clean `open_microwave`, 100 episodes each, after the evaluation runs free a GPU:
+- Qwen-Image-2.1 at steps 55,000 and 60,000: a stable failure rules out a one-checkpoint effect.
+- Qwen-Image-2.1 with the predicted future frame saved at each replan: whether the video expert predicts the release (world-model error) or the action expert releases against a correct frame prediction.
+- FLUX.2-9B (Phase 8) gives a second trained-here model under the same schedule and clipping.
 
 ## Resolution
 
