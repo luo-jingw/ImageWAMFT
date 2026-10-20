@@ -47,11 +47,9 @@ No model trained here has a RoboTwin success rate, and the evaluation pipeline h
 
 1. **Pipeline check:** the released FLUX.2-4B under the paper protocol. Its per-task and mean success are compared with paper Table 12 (93.20% clean, 93.56% randomized).
 2. **Trained models:** FLUX.2-9B and Qwen-Image-2.1, both at step 65,000, under the same protocol.
-3. **Results** in `docs/robotwin_training_results.md`:
-   - per-task clean and randomized success of the three models, and their means with standard errors;
-   - differences between models;
-   - episode time and GPU use;
-   - the training section of both runs.
+3. **Results:**
+   - in `docs/robotwin_evaluation_results.md`: per-task clean and randomized success of the three models, their means with standard errors, differences between models, episode time and GPU use;
+   - in `docs/robotwin_training_results.md`: the training section of both runs.
 
 Protocol, fixed for all three models:
 - 50 tasks; clean (`demo_clean`) and randomized (`demo_randomized`); 100 episodes per task and setting;
@@ -80,7 +78,7 @@ Constraint check against this goal:
   - reads each model's result directory and the reference;
   - checks episode counts, and per pair of models the shared seeds and instructions;
   - writes the result tables.
-- **Results** `docs/robotwin_training_results.md`.
+- **Results:** `docs/robotwin_evaluation_results.md` (evaluation), `docs/robotwin_training_results.md` (training).
 
 ## Decisions
 
@@ -117,7 +115,7 @@ Constraint check against this goal:
 |---|---|---|
 | Evaluation results | manager and workers | `ImageWAM/evaluate_results/robotwin/<checkpoint stem>/<OUTPUT_TAG>/` |
 | Paper reference values | reference file | `launch/robotwin_table12_flux2_4b.csv` |
-| Result tables | comparison script | its output, copied into `docs/robotwin_training_results.md` |
+| Result tables | comparison script | its output, copied into `docs/robotwin_evaluation_results.md` |
 | Qwen-Image-2.1 evaluation text features | text server | `checkpoints/robotwin_eval_text_cache/qwenimage21/` |
 
 # Interface
@@ -174,7 +172,8 @@ Per model: an evaluation directory with `summary.json`, `summary.csv`, `manager.
 | Host and GPU check, workers per GPU | `launch/robotwin_eval.sh` |
 | Text server memory | `ImageWAM/scripts/qwenimage21/qwen_text_server.py` |
 | Evaluation config check, protocol facts | `docs/robotwin_training_setup.md` (Evaluation Protocol) |
-| Training and evaluation results | `docs/robotwin_training_results.md` |
+| Evaluation results | `docs/robotwin_evaluation_results.md` |
+| Training results | `docs/robotwin_training_results.md` |
 | Run state, open problems | `PROJECT.md`, `issues.md` |
 
 # Implementation
@@ -406,7 +405,7 @@ Released FLUX.2-4B under the full protocol, compared with Table 12 (E3).
 
 ### Files
 
-`docs/robotwin_training_results.md` (RoboTwin Evaluation).
+`docs/robotwin_evaluation_results.md`.
 
 ### Structures
 
@@ -471,7 +470,7 @@ Comparison of the three models and the evaluation write-up.
 
 ### Files
 
-`docs/robotwin_training_results.md` (RoboTwin Evaluation).
+`docs/robotwin_evaluation_results.md`.
 
 ### Structures
 

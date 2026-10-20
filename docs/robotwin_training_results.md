@@ -1,6 +1,6 @@
 # RoboTwin 2.0 Training Results
 
-Training runs and RoboTwin evaluation of the FLUX.2-9B and Qwen-Image-2.1 models. The setup and its verification against the released FLUX.2-4B model are in `docs/robotwin_training_setup.md`. The smoke-test measurements are in the training plan, Phase 4 (`git show 8f02eb3:plan.md`).
+Training runs of the FLUX.2-9B and Qwen-Image-2.1 models. Their RoboTwin evaluation is in `docs/robotwin_evaluation_results.md`. The setup and its verification against the released FLUX.2-4B model are in `docs/robotwin_training_setup.md`. The smoke-test measurements are in the training plan, Phase 4 (`git show 8f02eb3:plan.md`).
 
 ## Runs
 
@@ -94,10 +94,6 @@ Validation at the final weights: mean ± standard error of the 20 evaluations at
 | Training loss, steps 64,001–65,000 (total / action / video) | 0.0737 / 0.00145 / 0.0723 | 0.0318 / 0.00164 / 0.0302 |
 
 - The two models agree on every action and predicted-frame metric within one standard error. With 4–8 random samples per evaluation, single evaluations, including the one at step 65,000, are noise-dominated.
-
-## RoboTwin Evaluation
-
-Pending (`plan.md`).
 
 ## Published Weights
 
