@@ -461,6 +461,13 @@ Phase 7 (pipeline check passed).
 - Memory check: peak GPU memory with 2 workers per GPU on randomized scenes.
 - 100 episodes per (task, phase), per-task and mean success; wall-clock time; failed or resumed workers.
 
+Memory check (2026-10-20, `smoke_h100_9b_w2`, log `checkpoints/robotwin_logs/smoke_h100_9b_w2.log`):
+- 8 tasks × 5 randomized episodes (`adjust_bottle`, `beat_block_hammer`, `blocks_ranking_rgb`, `handover_mic`, `open_laptop`, `pick_diverse_bottles`, `put_object_cabinet`, `stack_bowls_three`), 2 workers per GPU, 12.4 min, no failure.
+- Peak GPU memory 86.7–86.9 GiB of 93.6 GiB per GPU, sampled every 5 s (`smoke_h100_9b_w2_mem.log`). Host memory available stayed above 385 GB while the 8 workers loaded the 38.9 GB weight file at once. Mean GPU utilization 9–50%.
+- Workers per GPU stay at the launcher default of 2.
+
+Full run started 2026-10-20 16:38 EDT in tmux `imagewamft_eval_9b`, log `checkpoints/robotwin_logs/eval_9b_full.log`, 8 workers. The output is `ImageWAM/evaluate_results/robotwin/step_065000/flux2_9b_step065000_full/`.
+
 ## Phase 9
 
 Phase Status: pending
