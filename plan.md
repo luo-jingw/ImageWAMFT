@@ -323,7 +323,7 @@ Result (2026-10-19, `smoke_h100_qwen_w3`):
 
 ## Phase 5
 
-Phase Status: active
+Phase Status: completed
 
 Round: 3
 
@@ -353,7 +353,13 @@ Phases 1 and 4.
 - per-task and mean success;
 - wall-clock time, peak GPU memory, failed or resumed workers.
 
-Started 2026-10-19 16:49 EDT in tmux `imagewamft_eval_qwen`, log `checkpoints/robotwin_logs/eval_qwen_full.log`.
+Result:
+- Ran from 2026-10-19 16:49 to 2026-10-20 04:57 EDT (12.1 h) in tmux `imagewamft_eval_qwen`, log `checkpoints/robotwin_logs/eval_qwen_full.log`. 11 workers (`[2,3,3,3]`); no worker failed, no resume.
+- 50 tasks × 2 phases × 100 episodes, 200 records per task.
+- Mean success (`launch/robotwin_eval_compare.py`): clean 92.82 ± 0.33, randomized 94.00 ± 0.32. Paper Table 12 (FLUX.2-4B): 93.20, 93.56.
+- Tasks beyond 3 binomial standard errors of Table 12: `open_microwave` clean 47 against 97 (ISSUE-014); `stamp_seal` clean 98 against 79 and randomized 97 against 84.
+- 112.8 worker-hours, 40.6 worker-seconds per episode. One (task, phase) took 18 min (`press_stapler` clean) to 206 min (`open_microwave` clean).
+- GPU memory, sampled every minute: peak 68.2 GB on GPU 0 (text server and 2 workers), 72.1–74.1 GB on GPUs 1–3. Mean GPU utilization 53–67%. Host memory available stayed above 280 GB.
 
 ## Phase 6
 
@@ -388,7 +394,7 @@ None.
 
 ## Phase 7
 
-Phase Status: pending
+Phase Status: active
 
 Round: 4
 
@@ -416,6 +422,9 @@ Phase 5 (GPUs).
 
 - Per-task and mean success, clean and randomized, against Table 12, with the per-task difference in binomial standard errors.
 - Peak GPU memory with 3 workers per GPU; wall-clock time; failed or resumed workers.
+- `open_microwave` clean success per microwave model (ISSUE-014).
+
+Started 2026-10-20 04:59 EDT in tmux `imagewamft_eval_4b`, log `checkpoints/robotwin_logs/eval_4b_full.log`, 12 workers (3 per GPU). The output is `ImageWAM/evaluate_results/robotwin/model/flux2_4b_release_full/`.
 
 ## Phase 8
 

@@ -442,3 +442,45 @@ The way to finish the run is the user's decision:
 ## Resolution
 
 The run is not continued (decision of 2026-10-19). The step-65,000 weights are the final Qwen-Image-2.1 model. They are copied to `nnmc71` and published (`docs/robotwin_training_results.md` → Published Weights). The standing order still excludes `nnmc73`–`nnmc76` (`PROJECT.md`).
+
+
+# ISSUE-014
+
+Status: Open
+
+Area: RoboTwin evaluation, Qwen-Image-2.1 on `open_microwave` clean
+
+## Observation
+
+Qwen-Image-2.1 (step 65,000) succeeds in 47 of 100 clean `open_microwave` episodes, against 97% for FLUX.2-4B in paper Table 12. Its randomized success is 89 (Table 12: 94).
+
+## Impact
+
+- The clean mean of Qwen-Image-2.1 loses 1.0 point on this task alone.
+- 53 failed episodes run to the 1,500-action limit, so this (task, phase) took 206 min, the longest of the run.
+
+## Evidence
+
+- Results: `ImageWAM/evaluate_results/robotwin/step_065000/qwenimage21_step065000_full/open_microwave/`.
+- The task draws one of two microwave models (`envs/open_microwave.py`, `model_id` 0 or 1). The unseen instructions name the model (`description/objects_description/044_microwave/base{0,1}.json`). Success per model:
+
+  | | base0 (gray and yellow, top vents) | base1 (dark gray, slanted walls) |
+  |---|---|---|
+  | clean | 41 / 48 | 6 / 52 |
+  | randomized | 46 / 47 | 43 / 53 |
+
+- All 53 clean failures end at the 1,500-action limit; successes take 153–438 actions.
+- Last frame of clean episode 14 (base1, failed): the door is partly open, below the success threshold of 60% of the joint limit (`check_success`), and the arm no longer moves it.
+
+## Hypotheses
+
+- The model fails on base1 in clean scenes specifically. The same microwave in randomized scenes succeeds 43 of 53 times.
+- An evaluation pipeline difference affects this (task, phase). The released FLUX.2-4B run under the same pipeline separates the two.
+
+## Next Experiment
+
+The released FLUX.2-4B full run (`plan.md` Phase 7): its `open_microwave` clean success, split per microwave model as above. A result near Table 12 (97) points to the Qwen-Image-2.1 model; a base1 failure there too points to the pipeline.
+
+## Resolution
+
+Open.
