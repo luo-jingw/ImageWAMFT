@@ -470,6 +470,8 @@ Qwen-Image-2.1 (step 65,000) succeeds in 47 of 100 clean `open_microwave` episod
   | Qwen-Image-2.1, randomized | 46 / 47 | 43 / 53 |
   | released FLUX.2-4B, clean | 46 / 49 | 47 / 51 |
   | released FLUX.2-4B, randomized | 46 / 46 | 46 / 54 |
+  | FLUX.2-9B (this project, step 65,000), clean | 51 / 53 | 47 / 47 |
+  | FLUX.2-9B (this project, step 65,000), randomized | 49 / 50 | 40 / 50 |
 
 - Same scenes: the two runs share 89 clean seeds, and each shared seed draws the same microwave model in both. On the 47 shared clean base1 seeds, FLUX.2-4B succeeds 43 times and Qwen-Image-2.1 6 times; 37 seeds succeed with FLUX.2-4B only, none with Qwen-Image-2.1 only.
 - Instruction text: each of the three unseen base1 descriptions fails in clean scenes and succeeds in randomized ones with Qwen-Image-2.1:
@@ -495,16 +497,15 @@ Qwen-Image-2.1 (step 65,000) succeeds in 47 of 100 clean `open_microwave` episod
 
 ## Hypotheses
 
-- Ruled out: the evaluation pipeline (FLUX.2-4B reaches 93 clean under it) and the instruction text alone (the same base1 descriptions succeed in randomized scenes).
+- Ruled out: the evaluation pipeline (FLUX.2-4B reaches 93 clean under it), the instruction text alone (the same base1 descriptions succeed in randomized scenes), and this project's training recipe (FLUX.2-9B, trained with it to the same step-65,000 stop and clipping, succeeds on all 47 clean base1 episodes, median 194 actions).
 - Base1 needs a longer pull than base0, and clean scenes have 7 base1 demonstrations against 43 for base0. Qwen-Image-2.1 releases the base1 handle at about the point where a base0 episode would be done, which matches following the base0 motion in clean scenes. FLUX.2-4B generalizes from the 167 randomized base1 demonstrations; Qwen-Image-2.1 does not.
-- The difference between the two models may come from the backbone (latent space, text encoder), from the shorter schedule (65,000 of 69,900 steps) and gradient clipping, or from run-to-run variance. The data above do not separate these.
+- What remains is the Qwen-Image-2.1 backbone (latent space, text encoder) or run-to-run variance of its single training run. The data above do not separate these.
 
 ## Next Experiment
 
 All on clean `open_microwave`, 100 episodes each, after the evaluation runs free a GPU:
 - Qwen-Image-2.1 at steps 55,000 and 60,000: a stable failure rules out a one-checkpoint effect.
 - Qwen-Image-2.1 with the predicted future frame saved at each replan: whether the video expert predicts the release (world-model error) or the action expert releases against a correct frame prediction.
-- FLUX.2-9B (Phase 8) gives a second trained-here model under the same schedule and clipping.
 
 ## Resolution
 

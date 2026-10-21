@@ -1,6 +1,6 @@
 # Plan
 
-Plan Status: approved
+Plan Status: completed
 
 Approval: the user approved this plan on 2026-10-19. The evaluation runs on one node with 4 GPUs (E2). The FLUX.2-9B run was stopped the same day, so both trained models are evaluated at step 65,000 (E1), and Qwen-Image-2.1 is evaluated first (E3).
 
@@ -432,7 +432,7 @@ Result (`docs/robotwin_evaluation_results.md`):
 
 ## Phase 8
 
-Phase Status: active
+Phase Status: completed
 
 Round: 5
 
@@ -466,11 +466,11 @@ Memory check (2026-10-20, `smoke_h100_9b_w2`, log `checkpoints/robotwin_logs/smo
 - Peak GPU memory 86.7–86.9 GiB of 93.6 GiB per GPU, sampled every 5 s (`smoke_h100_9b_w2_mem.log`). Host memory available stayed above 385 GB while the 8 workers loaded the 38.9 GB weight file at once. Mean GPU utilization 9–50%.
 - Workers per GPU stay at the launcher default of 2.
 
-Full run started 2026-10-20 16:38 EDT in tmux `imagewamft_eval_9b`, log `checkpoints/robotwin_logs/eval_9b_full.log`, 8 workers. The output is `ImageWAM/evaluate_results/robotwin/step_065000/flux2_9b_step065000_full/`.
+Full run (`docs/robotwin_evaluation_results.md`): 2026-10-20 16:38 – 10-21 05:47 EDT (13.2 h) in tmux `imagewamft_eval_9b`, log `checkpoints/robotwin_logs/eval_9b_full.log`, 8 workers, no worker failed, no resume. Peak GPU memory 89.0–90.0 GiB per GPU. Mean success 94.58 ± 0.30 clean and 94.34 ± 0.31 randomized.
 
 ## Phase 9
 
-Phase Status: pending
+Phase Status: completed
 
 Round: 6
 
@@ -499,3 +499,5 @@ Phases 1, 5, 7 and 8.
 - Per-task and mean success of the three models, with standard errors.
 - Differences of means and paired differences on shared seeds: FLUX.2-9B − 4B, Qwen-Image-2.1 − 4B, and Qwen-Image-2.1 − FLUX.2-9B.
 - The step and clipping differences against the 4B stated beside each comparison.
+
+Result: `docs/robotwin_evaluation_results.md` → Success Rates, from `launch/robotwin_eval_compare.py` over the three result directories.
